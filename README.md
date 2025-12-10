@@ -5,10 +5,15 @@
   <img src="https://img.shields.io/badge/Express-4.x-blue?style=flat-square&logo=express" alt="Express">
   <img src="https://img.shields.io/badge/SQLite-3-blue?style=flat-square&logo=sqlite" alt="SQLite">
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker" alt="Docker">
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/License-GPL%20v3.0-red?style=flat-square&logo=gnu" alt="License">
 </p>
 
 一个轻量级的多平台资金追踪与记账系统，支持 A股、港股、美股、虚拟币等多种投资平台的资金管理。
+
+## 🖼️ 预览图
+![1](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 008 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
+![2](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 009 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
+![3](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 010 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
 
 ## ✨ 功能特性
 
@@ -307,9 +312,36 @@ finance-tracker/
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 提交 Pull Request
 
-## 📄 许可证
+## 📝 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采用 GNU General Public License v3.0 (GPL v3.0) 许可证
+
+### GPL v3.0 意味着：
+
+✅ **可自由使用、修改和分发**
+- 您可以自由地使用、修改和分发本软件
+- 可用于个人和商业目的
+
+📝 **必须开源修改版本**
+- 如果您修改了代码并分发，必须开源修改后的版本
+- 任何衍生作品也必须使用 GPL v3.0 协议
+
+📝 **必须保留原作者版权**
+- 需要保留原作者的版权声明
+- 必须标明原始作者和贡献者
+
+📝 **衍生作品必须使用 GPL v3.0 协议**
+- 基于本项目创建的任何衍生作品都必须使用相同的许可证
+- 确保开源精神的传承
+
+### 许可证文件
+- 完整许可证文本请查看 [LICENSE](LICENSE) 文件
+- 或访问 [GNU GPL v3.0 官方页面](https://www.gnu.org/licenses/gpl-3.0.html)
+
+### 商业使用
+- ✅ 允许商业使用
+- ✅ 允许集成到商业产品中
+- ⚠️ 但整个产品必须开源并使用 GPL v3.0 许可证
 
 ## 🙏 致谢
 

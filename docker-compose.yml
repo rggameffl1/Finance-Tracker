@@ -1,0 +1,46 @@
+# {{CODE-Cycle-Integration:
+#   Task_ID: #Docker-002
+#   Timestamp: 2025-12-10
+#   Phase: D-Develop
+#   Context-Analysis: "Docker Compose 配置 - 数据持久化和服务编排"
+#   Principle_Applied: "Data Persistence, Easy Deployment"
+# }}
+
+version: '3.8'
+
+services:
+  finance-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance-tracker
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # 数据库持久化 - 将数据库文件挂载到宿主机
+      - finance-data:/app/database
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - finance-network
+
+# 命名卷 - 数据持久化
+volumes:
+  finance-data:
+    driver: local
+    name: finance-tracker-data
+
+# 网络配置
+networks:
+  finance-network:
+    driver: bridge
+    name: finance-tracker-network

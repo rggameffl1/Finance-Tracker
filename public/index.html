@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Tracker - 多平台资金管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <span class="logo">💰</span>
+      <span class="brand-text">Finance Tracker</span>
+    </div>
+    <div class="navbar-actions">
+      <div class="currency-selector">
+        <label for="displayCurrency">显示币种:</label>
+        <select id="displayCurrency">
+          <option value="CNY">CNY (人民币)</option>
+          <option value="HKD">HKD (港币)</option>
+          <option value="USD">USD (美元)</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" id="refreshRatesBtn" title="刷新汇率">
+        <span class="icon">🔄</span>
+        <span>刷新汇率</span>
+      </button>
+      <div class="theme-toggle" id="themeToggle" title="切换主题">
+        <div class="theme-toggle-track">
+          <span class="theme-toggle-icon sun">☀️</span>
+          <span class="theme-toggle-icon moon">🌙</span>
+        </div>
+        <div class="theme-toggle-thumb"></div>
+      </div>
+      <button class="btn btn-icon" id="settingsBtn" title="设置">
+        <span class="icon">⚙️</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+    <!-- 全平台资金总览 -->
+    <section class="section overview-section">
+      <h2 class="section-title">
+        <span class="icon">📊</span>
+        全平台资金总览
+      </h2>
+      <div class="overview-cards">
+        <div class="overview-card total-capital">
+          <div class="card-icon">💎</div>
+          <div class="card-content">
+            <div class="card-label">总资金</div>
+            <div class="card-value" id="totalCapital">--</div>
+          </div>
+        </div>
+        <div class="overview-card initial-capital">
+          <div class="card-icon">🏦</div>
+          <div class="card-content">
+            <div class="card-label">初始资金</div>
+            <div class="card-value" id="totalInitialCapital">--</div>
+          </div>
+        </div>
+        <div class="overview-card total-profit">
+          <div class="card-icon">📈</div>
+          <div class="card-content">
+            <div class="card-label">总盈亏</div>
+            <div class="card-value" id="totalProfit">--</div>
+          </div>
+        </div>
+        <div class="overview-card change-percent">
+          <div class="card-icon">📉</div>
+          <div class="card-content">
+            <div class="card-label">涨跌幅</div>
+            <div class="card-value" id="totalChangePercent">--</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 平台资金管理 -->
+    <section class="section platforms-section">
+      <h2 class="section-title">
+        <span class="icon">🏛️</span>
+        平台资金管理
+      </h2>
+      <div class="platforms-grid" id="platformsGrid">
+        <!-- 平台卡片将通过JS动态生成 -->
+      </div>
+    </section>
+
+    <!-- 交易记录 -->
+    <section class="section transactions-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="icon">📝</span>
+          交易记录
+        </h2>
+        <div class="section-actions">
+          <select id="platformFilter" class="filter-select">
+            <option value="">全部平台</option>
+          </select>
+          <button class="btn btn-primary" id="addTransactionBtn">
+            <span class="icon">➕</span>
+            新增记录
+          </button>
+        </div>
+      </div>
+      <div class="table-container">
+        <table class="data-table" id="transactionsTable">
+          <thead>
+            <tr>
+              <th>平台</th>
+              <th>名称/代码</th>
+              <th>类型</th>
+              <th>方向</th>
+              <th>杠杆</th>
+              <th>开仓时间</th>
+              <th>平仓时间</th>
+              <th>持仓时间</th>
+              <th>总盈亏</th>
+              <th>总费用</th>
+              <th>实现盈亏</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="transactionsBody">
+            <!-- 交易记录将通过JS动态生成 -->
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination">
+        <!-- 分页将通过JS动态生成 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- 交易记录模态框 -->
+  <div class="modal" id="transactionModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">新增交易记录</h3>
+        <button class="btn btn-icon modal-close" id="closeModal">✕</button>
+      </div>
+      <form id="transactionForm" class="modal-body">
+        <input type="hidden" id="transactionId">
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="platformId">平台 *</label>
+            <select id="platformId" required>
+              <option value="">请选择平台</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="assetName">名称 *</label>
+            <input type="text" id="assetName" placeholder="如：腾讯控股、BTC" required>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="assetCode">代码 *</label>
+            <input type="text" id="assetCode" placeholder="如：00700.HK、BTC-USDT" required>
+          </div>
+          <div class="form-group">
+            <label for="type">类型 *</label>
+            <select id="type" required>
+              <option value="现货">现货</option>
+              <option value="合约">合约</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="direction">方向 *</label>
+            <select id="direction" required>
+              <option value="开多">开多</option>
+              <option value="开空">开空</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="leverage">杠杆</label>
+            <input type="text" id="leverage" value="1" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="openPrice">开仓价格</label>
+            <input type="text" id="openPrice" inputmode="decimal" placeholder="支持任意小数位">
+          </div>
+          <div class="form-group">
+            <label for="closePrice">平仓价格</label>
+            <input type="text" id="closePrice" inputmode="decimal" placeholder="未平仓可留空">
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="investment">投入资金</label>
+            <input type="text" id="investment" inputmode="decimal" placeholder="投入的资金金额">
+          </div>
+          <div class="form-group">
+            <label for="quantity">持仓量 <button type="button" class="btn-calc" id="calcQuantityBtn" title="根据投入资金和开仓价格自动计算">🔄 自动计算</button></label>
+            <input type="text" id="quantity" inputmode="decimal" placeholder="可手动输入或自动计算">
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="openTime">开仓时间 *</label>
+            <input type="text" id="openTime" placeholder="YYYY-MM-DD HH:mm:ss" required>
+          </div>
+          <div class="form-group">
+            <label for="closeTime">平仓时间</label>
+            <input type="text" id="closeTime" placeholder="YYYY-MM-DD HH:mm:ss (可选)">
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="formTotalProfit">总盈亏</label>
+            <input type="text" id="formTotalProfit" value="0" inputmode="decimal">
+          </div>
+          <div class="form-group">
+            <label for="formTotalFee">总费用</label>
+            <input type="text" id="formTotalFee" value="0" inputmode="decimal">
+          </div>
+        </div>
+        
+        <div class="form-group full-width">
+          <label for="reason">交易理由</label>
+          <textarea id="reason" rows="3" placeholder="记录您的交易理由..."></textarea>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="cancelBtn">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 平台设置模态框 -->
+  <div class="modal" id="platformModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3 id="platformModalTitle">编辑平台</h3>
+        <button class="btn btn-icon modal-close" id="closePlatformModal">✕</button>
+      </div>
+      <form id="platformForm" class="modal-body">
+        <input type="hidden" id="editPlatformId">
+        
+        <div class="form-group">
+          <label for="platformName">平台名称</label>
+          <input type="text" id="platformName" readonly>
+        </div>
+        
+        <div class="form-group">
+          <label for="platformCurrency">币种</label>
+          <input type="text" id="platformCurrency" readonly>
+        </div>
+        
+        <div class="form-group">
+          <label for="initialCapital">初始资金 *</label>
+          <input type="text" id="initialCapital" value="0" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" required>
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="cancelPlatformBtn">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 设置模态框 -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3>设置</h3>
+        <button class="btn btn-icon modal-close" id="closeSettingsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h4>汇率信息</h4>
+          <div class="rates-display" id="ratesDisplay">
+            <!-- 汇率信息将通过JS动态生成 -->
+          </div>
+          <button class="btn btn-secondary btn-block" id="refreshRatesBtn2">
+            <span class="icon">🔄</span>
+            刷新汇率
+          </button>
+        </div>
+        
+        <div class="settings-section">
+          <h4>汇率更新频率</h4>
+          <select id="updateInterval" class="form-control">
+            <option value="1800000">每30分钟</option>
+            <option value="3600000">每1小时</option>
+            <option value="7200000">每2小时</option>
+            <option value="21600000">每6小时</option>
+            <option value="86400000">每24小时</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

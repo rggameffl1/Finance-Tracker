@@ -13,13 +13,13 @@
 ## 🖼️ 预览图
 
 ### 主界面总览
-![主界面总览](https://github.com/rggameffl1/Finance-Tracker/raw/main/images/FireShot%20Capture%20008%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B4%A7%E9%92%B1%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%20%5Blocalhost%5D.png)
+![主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/1.png?raw=true)
 
 ### 交易记录管理
-![交易记录管理](https://github.com/rggameffl1/Finance-Tracker/raw/main/images/FireShot%20Capture%20009%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B4%A7%E9%92%B1%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%20%5Blocalhost%5D.png)
+![交易记录管理](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/2=true)
 
 ### 数据统计总览
-![数据统计总览](https://github.com/rggameffl1/Finance-Tracker/raw/main/images/FireShot%20Capture%20010%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B4%A7%E9%92%B1%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%20%5Blocalhost%5D.png)
+![数据统计总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/3.png?raw=true)
 
 ## ✨ 功能特性
 

@@ -11,9 +11,9 @@
 一个轻量级的多平台资金追踪与记账系统，支持 A股、港股、美股、虚拟币等多种投资平台的资金管理。
 
 ## 🖼️ 预览图
-![1](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 008 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
-![2](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 009 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
-![3](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 010 - Finance Tracker - 多平台资金管理系统 - [localhost].png)
+![1]([https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 008 - Finance Tracker - 多平台资金管理系统 - [localhost].png](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot%20Capture%20008%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B5%84%E9%87%91%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%5Blocalhost%5D.png))
+![2]([https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 009 - Finance Tracker - 多平台资金管理系统 - [localhost].png](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot%20Capture%20009%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B5%84%E9%87%91%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%5Blocalhost%5D.png))
+![3]([https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot Capture 010 - Finance Tracker - 多平台资金管理系统 - [localhost].png](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/FireShot%20Capture%20010%20-%20Finance%20Tracker%20-%20%E5%A4%9A%E5%B9%B3%E5%8F%B0%E8%B5%84%E9%87%91%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%20-%20%5Blocalhost%5D.png))
 
 ## ✨ 功能特性
 

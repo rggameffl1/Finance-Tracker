@@ -74,7 +74,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/finance-tracker.git
+git clone https://github.com/rggameffl1/Finance-Tracker.git
 cd finance-tracker
 
 # 2. 使用 Docker Compose 启动
@@ -121,7 +121,7 @@ docker cp finance-tracker:/app/database/finance.db ./backup/
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/finance-tracker.git
+git clone https://github.com/rggameffl1/Finance-Tracker.git
 cd finance-tracker
 
 # 2. 安装依赖

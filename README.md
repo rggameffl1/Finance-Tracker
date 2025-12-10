@@ -16,7 +16,7 @@
 ![主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/1.png?raw=true)
 
 ### 交易记录管理
-![交易记录管理](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/2=true)
+![交易记录管理](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/2.png?raw=true)
 
 ### 数据统计总览
 ![数据统计总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/3.png?raw=true)

@@ -12,14 +12,23 @@
 
 ## 🖼️ 预览图
 
-### 主界面总览
-![主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/1.png?raw=true)
+### 深色主题 - 主界面总览
+![深色主题 - 主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/1.png?raw=true)
 
-### 交易记录管理
-![交易记录管理](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/2.png?raw=true)
+### 浅色主题 - 主界面总览
+![浅色主题 - 主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/2.png?raw=true)
 
-### 数据统计总览
-![数据统计总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/3.png?raw=true)
+### 深色主题 - 设置页面
+![深色主题 - 设置页面](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/3.png?raw=true)
+
+### 深色主题 - 交易记录管理
+![深色主题 - 交易记录管理](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/4.png?raw=true)
+
+### 浅色主题 - 设置页面
+![深色主题 - 设置页面](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/5.png?raw=true)
+
+### 深色主题 - 主界面总览
+![深色主题 - 主界面总览](https://github.com/rggameffl1/Finance-Tracker/blob/main/images/6.png?raw=true)
 
 ## ✨ 功能特性
 

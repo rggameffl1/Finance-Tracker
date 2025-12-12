@@ -536,12 +536,13 @@ const CustomSelect = {
 };
 
 /**
- * 主题管理器
+ * 主题管理器 - 带透明圆形扩散动画（克隆页面内容实现真正的透明效果）
  */
 const ThemeManager = {
   STORAGE_KEY: 'finance-tracker-theme',
   DARK_THEME: 'dark',
   LIGHT_THEME: 'light',
+  isAnimating: false,
   
   /**
    * 初始化主题管理器
@@ -558,13 +559,13 @@ const ThemeManager = {
     // 绑定切换按钮事件
     const toggleBtn = document.getElementById('themeToggle');
     if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => this.toggle());
+      toggleBtn.addEventListener('click', (e) => this.toggle(e));
     }
     
     // 监听系统主题变化
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
       if (!localStorage.getItem(this.STORAGE_KEY)) {
-        this.applyTheme(e.matches ? this.DARK_THEME : this.LIGHT_THEME, true);
+        this.applyTheme(e.matches ? this.DARK_THEME : this.LIGHT_THEME, false);
       }
     });
   },
@@ -577,29 +578,240 @@ const ThemeManager = {
   },
   
   /**
-   * 切换主题
+   * 切换主题（带透明圆形扩散动画）
    */
-  toggle() {
+  async toggle(event) {
+    if (this.isAnimating) return;
+    
     const currentTheme = this.getCurrentTheme();
     const newTheme = currentTheme === this.DARK_THEME ? this.LIGHT_THEME : this.DARK_THEME;
-    this.applyTheme(newTheme, true);
+    const toggleBtn = document.getElementById('themeToggle');
+    
+    // 获取按钮位置作为动画起点
+    let x, y;
+    if (toggleBtn) {
+      const rect = toggleBtn.getBoundingClientRect();
+      x = rect.left + rect.width / 2;
+      y = rect.top + rect.height / 2;
+      
+      // 添加脉冲效果
+      toggleBtn.classList.add('switching');
+      setTimeout(() => toggleBtn.classList.remove('switching'), 300);
+    } else {
+      x = window.innerWidth / 2;
+      y = window.innerHeight / 2;
+    }
+    
+    // 尝试使用 View Transitions API（如果支持）
+    if (document.startViewTransition) {
+      await this.animateWithViewTransition(x, y, newTheme);
+    } else if (this.supportsClipPath()) {
+      // 降级方案：使用截图 + clip-path
+      await this.animateWithScreenshot(x, y, newTheme);
+    } else {
+      // 最终降级：直接切换
+      this.applyTheme(newTheme, true);
+    }
+    
     localStorage.setItem(this.STORAGE_KEY, newTheme);
+  },
+  
+  /**
+   * 检查浏览器是否支持 clip-path 动画
+   */
+  supportsClipPath() {
+    return CSS.supports && CSS.supports('clip-path', 'circle(50%)');
+  },
+  
+  /**
+   * 使用 View Transitions API 实现动画（最佳方案）
+   * 切换到浅色：浅色（新视图）从按钮向外扩散
+   * 切换到深色：浅色（旧视图）从外向按钮收缩
+   */
+  async animateWithViewTransition(x, y, newTheme) {
+    this.isAnimating = true;
+    const root = document.documentElement;
+    
+    // 计算需要覆盖整个屏幕的圆的半径
+    const maxRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+    
+    const isGoingToLight = newTheme === this.LIGHT_THEME;
+    
+    // 禁用 CSS 过渡效果，避免闪屏
+    root.classList.add('theme-clip-animating');
+    
+    // 在动画开始前设置 z-index
+    // 切换到浅色：新视图在上面（浅色扩散覆盖深色）
+    // 切换到深色：旧视图在上面（浅色收缩露出深色）
+    if (isGoingToLight) {
+      root.style.setProperty('--vt-old-z', '1');
+      root.style.setProperty('--vt-new-z', '9999');
+    } else {
+      root.style.setProperty('--vt-old-z', '9999');
+      root.style.setProperty('--vt-new-z', '1');
+    }
+    
+    try {
+      const transition = document.startViewTransition(() => {
+        this.applyTheme(newTheme, false);
+      });
+      
+      // 等待准备完成
+      await transition.ready;
+      
+      // 应用自定义动画 - 更流畅的参数
+      const duration = 600;
+      const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+      
+      if (isGoingToLight) {
+        // 切换到浅色：新视图（浅色）从按钮向外扩散
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${maxRadius}px at ${x}px ${y}px)`
+            ]
+          },
+          {
+            duration,
+            easing,
+            fill: 'forwards',
+            pseudoElement: '::view-transition-new(root)'
+          }
+        );
+      } else {
+        // 切换到深色：旧视图（浅色）从外向按钮收缩
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(${maxRadius}px at ${x}px ${y}px)`,
+              `circle(0px at ${x}px ${y}px)`
+            ]
+          },
+          {
+            duration,
+            easing,
+            fill: 'forwards',
+            pseudoElement: '::view-transition-old(root)'
+          }
+        );
+      }
+      
+      await transition.finished;
+    } catch (e) {
+      console.warn('View Transition failed:', e);
+      this.applyTheme(newTheme, false);
+    }
+    
+    // 清理 - 延迟一点时间确保动画完全结束
+    setTimeout(() => {
+      root.style.removeProperty('--vt-old-z');
+      root.style.removeProperty('--vt-new-z');
+      root.classList.remove('theme-clip-animating');
+      this.isAnimating = false;
+    }, 50);
+  },
+  
+  /**
+   * 使用 clip-path 实现动画（降级方案）
+   * 切换到浅色：浅色覆盖层从按钮向外扩散
+   * 切换到深色：浅色覆盖层从外向按钮收缩
+   */
+  async animateWithScreenshot(x, y, newTheme) {
+    this.isAnimating = true;
+    const root = document.documentElement;
+    
+    // 计算需要覆盖整个屏幕的圆的半径
+    const maxRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+    
+    const isGoingToLight = newTheme === this.LIGHT_THEME;
+    
+    // 禁用默认过渡
+    root.classList.add('theme-clip-animating');
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'theme-transition-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 99999;
+      will-change: clip-path;
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // 更流畅的动画参数
+    const duration = 600;
+    const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+    
+    // 浅色背景样式
+    const lightBg = '#f8fafc';
+    const lightGradient = 'radial-gradient(ellipse at top, rgba(99, 102, 241, 0.05) 0%, transparent 50%), radial-gradient(ellipse at bottom right, rgba(16, 185, 129, 0.03) 0%, transparent 50%)';
+    
+    if (isGoingToLight) {
+      // 切换到浅色：浅色覆盖层从按钮向外扩散
+      overlay.style.background = lightBg;
+      overlay.style.backgroundImage = lightGradient;
+      overlay.style.clipPath = `circle(0px at ${x}px ${y}px)`;
+      
+      // 触发重排
+      overlay.offsetHeight;
+      
+      // 开始扩散动画
+      overlay.style.transition = `clip-path ${duration}ms ${easing}`;
+      overlay.style.clipPath = `circle(${maxRadius}px at ${x}px ${y}px)`;
+      
+      // 动画中间切换主题
+      setTimeout(() => {
+        this.applyTheme(newTheme, false);
+      }, duration / 2);
+      
+    } else {
+      // 切换到深色：浅色覆盖层从外向按钮收缩
+      overlay.style.background = lightBg;
+      overlay.style.backgroundImage = lightGradient;
+      overlay.style.clipPath = `circle(${maxRadius}px at ${x}px ${y}px)`;
+      
+      // 先切换主题（被覆盖层遮住）
+      this.applyTheme(newTheme, false);
+      
+      // 触发重排
+      overlay.offsetHeight;
+      
+      // 开始收缩动画
+      overlay.style.transition = `clip-path ${duration}ms ${easing}`;
+      overlay.style.clipPath = `circle(0px at ${x}px ${y}px)`;
+    }
+    
+    // 动画结束后清理
+    setTimeout(() => {
+      overlay.remove();
+      root.classList.remove('theme-clip-animating');
+      this.isAnimating = false;
+    }, duration);
   },
   
   /**
    * 应用主题
    * @param {string} theme - 主题名称
-   * @param {boolean} animate - 是否使用动画
+   * @param {boolean} animate - 是否使用CSS过渡动画
    */
   applyTheme(theme, animate = true) {
     const root = document.documentElement;
     const toggleBtn = document.getElementById('themeToggle');
     
-    if (animate) {
-      // 添加过渡类
+    if (animate && !root.classList.contains('theme-clip-animating')) {
       root.classList.add('theme-transitioning');
-      
-      // 动画结束后移除过渡类
       setTimeout(() => {
         root.classList.remove('theme-transitioning');
       }, 400);
@@ -608,9 +820,12 @@ const ThemeManager = {
     // 设置主题属性
     root.setAttribute('data-theme', theme);
     
-    // 更新切换按钮状态
+    // 更新切换按钮状态和aria标签
     if (toggleBtn) {
       toggleBtn.classList.toggle('light', theme === this.LIGHT_THEME);
+      toggleBtn.setAttribute('aria-label',
+        theme === this.DARK_THEME ? '切换到浅色主题' : '切换到深色主题'
+      );
     }
   },
   

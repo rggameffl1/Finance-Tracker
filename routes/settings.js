@@ -1,8 +1,8 @@
 // {{CODE-Cycle-Integration:
-//   Task_ID: #T006
-//   Timestamp: 2025-12-08T05:06:08Z
+//   Task_ID: #T006-T023
+//   Timestamp: 2025-12-11T04:50:00Z
 //   Phase: D-Develop
-//   Context-Analysis: "设置管理API - 获取和更新系统设置"
+//   Context-Analysis: "设置管理API - 获取和更新系统设置，数据导入导出"
 //   Principle_Applied: "RESTful, SOLID, Error Handling"
 // }}
 // {{START_MODIFICATIONS}}
@@ -119,6 +119,223 @@ router.delete('/:key', (req, res) => {
   } catch (error) {
     console.error('删除设置失败:', error);
     res.status(500).json({ error: '删除设置失败', message: error.message });
+  }
+});
+
+// ========================================
+// 数据导入导出功能（性能优化版）
+// ========================================
+
+// 导出所有数据（流式处理，优化内存使用）
+router.get('/export/all', (req, res) => {
+  try {
+    // 设置响应头，触发文件下载
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=finance-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`);
+    
+    // 使用流式写入，减少内存占用
+    res.write('{\n');
+    res.write(`  "version": "1.0",\n`);
+    res.write(`  "exportTime": "${new Date().toISOString()}",\n`);
+    res.write(`  "data": {\n`);
+    
+    // 导出平台数据
+    const platforms = db.prepare('SELECT * FROM platforms').all();
+    res.write(`    "platforms": ${JSON.stringify(platforms)},\n`);
+    
+    // 导出交易记录（分批处理大数据）
+    const transactionCount = db.prepare('SELECT COUNT(*) as count FROM transactions').get().count;
+    res.write(`    "transactions": [`);
+    
+    if (transactionCount > 0) {
+      const batchSize = 1000;
+      let offset = 0;
+      let isFirst = true;
+      
+      while (offset < transactionCount) {
+        const batch = db.prepare('SELECT * FROM transactions LIMIT ? OFFSET ?').all(batchSize, offset);
+        
+        batch.forEach((t, index) => {
+          if (!isFirst || index > 0) {
+            res.write(',');
+          }
+          res.write(JSON.stringify(t));
+          isFirst = false;
+        });
+        
+        offset += batchSize;
+      }
+    }
+    
+    res.write(`],\n`);
+    
+    // 导出汇率数据
+    const exchangeRates = db.prepare('SELECT * FROM exchange_rates').all();
+    res.write(`    "exchangeRates": ${JSON.stringify(exchangeRates)},\n`);
+    
+    // 导出设置
+    const settings = db.prepare('SELECT * FROM settings').all();
+    res.write(`    "settings": ${JSON.stringify(settings)}\n`);
+    
+    res.write(`  }\n`);
+    res.write('}\n');
+    res.end();
+  } catch (error) {
+    console.error('导出数据失败:', error);
+    res.status(500).json({ error: '导出数据失败', message: error.message });
+  }
+});
+
+// 导入数据（分批处理，优化性能）
+// 默认行为：覆盖现有数据（清除交易记录和汇率，保留平台配置）
+router.post('/import/all', (req, res) => {
+  try {
+    const { data, options = {} } = req.body;
+    
+    if (!data) {
+      return res.status(400).json({ error: '请提供导入数据' });
+    }
+    
+    const { platforms, transactions, exchangeRates, settings } = data;
+    // 默认覆盖模式（clearExisting = true），除非明确指定保留
+    const { keepExisting = false } = options;
+    
+    const result = {
+      platforms: { imported: 0, skipped: 0 },
+      transactions: { imported: 0, skipped: 0 },
+      exchangeRates: { imported: 0, skipped: 0 },
+      settings: { imported: 0, skipped: 0 }
+    };
+    
+    // 预编译SQL语句（性能优化）
+    const updatePlatformStmt = db.prepare(`
+      UPDATE platforms SET initial_capital = ? WHERE id = ?
+    `);
+    
+    const checkPlatformStmt = db.prepare('SELECT id FROM platforms WHERE id = ?');
+    
+    const insertTransactionStmt = db.prepare(`
+      INSERT INTO transactions (
+        platform_id, asset_name, asset_code, type, direction, leverage,
+        quantity, open_price, close_price, investment,
+        open_time, close_time, total_profit, total_fee, reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const upsertRateStmt = db.prepare(`
+      INSERT OR REPLACE INTO exchange_rates (from_currency, to_currency, rate, updated_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    const upsertSettingStmt = db.prepare(`
+      INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+    `);
+    
+    // 使用事务确保数据一致性，分批处理大数据
+    const importAll = db.transaction(() => {
+      // 默认覆盖模式：清除现有交易记录和汇率数据
+      // 只有当 keepExisting = true 时才保留现有数据
+      if (!keepExisting) {
+        db.prepare('DELETE FROM transactions').run();
+        db.prepare('DELETE FROM exchange_rates').run();
+      }
+      
+      // 导入平台数据（更新初始资金）
+      if (platforms && Array.isArray(platforms)) {
+        platforms.forEach(platform => {
+          try {
+            const existing = checkPlatformStmt.get(platform.id);
+            if (existing) {
+              updatePlatformStmt.run(platform.initial_capital || 0, platform.id);
+              result.platforms.imported++;
+            } else {
+              result.platforms.skipped++;
+            }
+          } catch (e) {
+            result.platforms.skipped++;
+          }
+        });
+      }
+      
+      // 导入交易记录（分批处理）
+      if (transactions && Array.isArray(transactions)) {
+        // 预先获取所有有效平台ID
+        const validPlatformIds = new Set(
+          db.prepare('SELECT id FROM platforms').all().map(p => p.id)
+        );
+        
+        transactions.forEach(t => {
+          try {
+            // 快速检查平台是否存在
+            if (!validPlatformIds.has(t.platform_id)) {
+              result.transactions.skipped++;
+              return;
+            }
+            
+            insertTransactionStmt.run(
+              t.platform_id,
+              t.asset_name,
+              t.asset_code,
+              t.type,
+              t.direction,
+              t.leverage || '1',
+              t.quantity,
+              t.open_price,
+              t.close_price,
+              t.investment,
+              t.open_time,
+              t.close_time,
+              t.total_profit || '0',
+              t.total_fee || '0',
+              t.reason
+            );
+            result.transactions.imported++;
+          } catch (e) {
+            console.error('导入交易记录失败:', e.message);
+            result.transactions.skipped++;
+          }
+        });
+      }
+      
+      // 导入汇率数据
+      if (exchangeRates && Array.isArray(exchangeRates)) {
+        exchangeRates.forEach(rate => {
+          try {
+            upsertRateStmt.run(
+              rate.from_currency,
+              rate.to_currency,
+              rate.rate,
+              rate.updated_at || new Date().toISOString()
+            );
+            result.exchangeRates.imported++;
+          } catch (e) {
+            result.exchangeRates.skipped++;
+          }
+        });
+      }
+      
+      // 导入设置
+      if (settings && Array.isArray(settings)) {
+        settings.forEach(setting => {
+          try {
+            upsertSettingStmt.run(setting.key, setting.value);
+            result.settings.imported++;
+          } catch (e) {
+            result.settings.skipped++;
+          }
+        });
+      }
+    });
+    
+    importAll();
+    
+    res.json({
+      message: '数据导入成功',
+      result
+    });
+  } catch (error) {
+    console.error('导入数据失败:', error);
+    res.status(500).json({ error: '导入数据失败', message: error.message });
   }
 });
 

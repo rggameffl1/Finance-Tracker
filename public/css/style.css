@@ -299,11 +299,41 @@ html.theme-transitioning *::after {
   padding: var(--spacing-sm);
   background: transparent;
   color: var(--text-secondary);
+  border-radius: var(--border-radius-sm);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-icon:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+  transform: scale(1.05);
+}
+
+.btn-icon:active {
+  transform: scale(0.95);
+}
+
+/* 导航栏圆形图标按钮 */
+.navbar .btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.navbar .btn-icon:hover {
+  border-color: var(--color-primary);
+  background: var(--bg-hover);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="light"] .navbar .btn-icon:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .btn-block {
@@ -315,84 +345,132 @@ html.theme-transitioning *::after {
 }
 
 /* ========================================
-   主题切换按钮
+   主题切换按钮 - 现代圆形设计
    ======================================== */
 .theme-toggle {
   position: relative;
-  width: 56px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: 50%;
   cursor: pointer;
-  transition: background-color var(--transition-theme),
-              border-color var(--transition-theme);
-  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
 }
 
 .theme-toggle:hover {
   border-color: var(--color-primary);
+  background: var(--bg-hover);
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
 }
 
 .theme-toggle-track {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 6px;
+  justify-content: center;
 }
 
 .theme-toggle-icon {
-  font-size: 14px;
-  transition: opacity var(--transition-theme),
-              transform var(--transition-theme);
+  position: absolute;
+  font-size: 18px;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
+/* 深色模式 - 显示月亮 */
 .theme-toggle-icon.sun {
-  opacity: 0.4;
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.5);
 }
 
 .theme-toggle-icon.moon {
   opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
+/* 浅色模式 - 显示太阳 */
 [data-theme="light"] .theme-toggle-icon.sun {
   opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
 [data-theme="light"] .theme-toggle-icon.moon {
-  opacity: 0.4;
+  opacity: 0;
+  transform: rotate(90deg) scale(0.5);
 }
 
-.theme-toggle-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  transition: transform var(--transition-theme),
-              background-color var(--transition-theme);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+/* 浅色模式下的按钮背景 */
+[data-theme="light"] .theme-toggle {
+  background: #fef3c7;
+  border-color: #fcd34d;
 }
 
-[data-theme="light"] .theme-toggle-thumb {
-  transform: translateX(28px);
-  background: var(--color-warning);
+[data-theme="light"] .theme-toggle:hover {
+  background: #fde68a;
+  border-color: #fbbf24;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
 }
 
-/* 切换动画 */
-.theme-toggle:active .theme-toggle-thumb {
-  width: 24px;
+/* ========================================
+   主题切换扩散动画 - 使用 View Transitions API
+   ======================================== */
+
+/* View Transitions API 样式 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }
 
-[data-theme="light"] .theme-toggle:active .theme-toggle-thumb {
-  transform: translateX(24px);
+/*
+ * 切换到浅色时：新视图（浅色）在上面扩散
+ * 切换到深色时：旧视图（浅色）在上面收缩
+ * 使用 CSS 变量来动态控制 z-index
+ */
+::view-transition-old(root) {
+  z-index: var(--vt-old-z, 1);
+}
+
+::view-transition-new(root) {
+  z-index: var(--vt-new-z, 9999);
+}
+
+/* 切换时的脉冲效果 */
+.theme-toggle.switching {
+  animation: themePulse 0.3s ease;
+}
+
+@keyframes themePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+/* 禁用主题切换时的默认过渡 */
+html.theme-clip-animating,
+html.theme-clip-animating * {
+  transition: none !important;
+}
+
+/* 降级方案的覆盖层样式 */
+#theme-transition-overlay {
+  will-change: clip-path;
 }
 
 /* ========================================
@@ -598,12 +676,14 @@ html.theme-transitioning *::after {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  table-layout: fixed;
 }
 
 .data-table th,
@@ -612,6 +692,9 @@ html.theme-transitioning *::after {
   text-align: left;
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
+  vertical-align: middle;
+  height: 56px;
+  box-sizing: border-box;
 }
 
 .data-table th {
@@ -620,6 +703,7 @@ html.theme-transitioning *::after {
   font-weight: 500;
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
 .data-table tbody tr {
@@ -634,9 +718,22 @@ html.theme-transitioning *::after {
   border-bottom: none;
 }
 
+/* 操作列样式 */
 .data-table .actions {
-  display: flex;
+  display: inline-flex;
   gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* 确保操作按钮样式一致 */
+.data-table .actions .btn-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .asset-info {
@@ -1051,6 +1148,49 @@ html.theme-transitioning *::after {
   margin-bottom: var(--spacing-md);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.settings-description {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-md);
+  line-height: 1.5;
+}
+
+.settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.import-options {
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.checkbox-label span {
+  flex: 1;
 }
 
 .rates-display {

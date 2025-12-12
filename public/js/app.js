@@ -1,8 +1,8 @@
 // {{CODE-Cycle-Integration:
-//   Task_ID: #T008-T012
-//   Timestamp: 2025-12-08T05:09:54Z
+//   Task_ID: #T008-T023
+//   Timestamp: 2025-12-11T04:51:00Z
 //   Phase: D-Develop
-//   Context-Analysis: "主应用逻辑 - 整合所有前端功能"
+//   Context-Analysis: "主应用逻辑 - 整合所有前端功能，包含数据导入导出"
 //   Principle_Applied: "SOLID, Event-Driven, State Management"
 // }}
 // {{START_MODIFICATIONS}}
@@ -126,6 +126,23 @@ const App = {
     // 自动计算持仓量按钮
     document.getElementById('calcQuantityBtn').addEventListener('click', () => {
       this.calculateQuantity();
+    });
+    
+    // 导出数据按钮
+    document.getElementById('exportDataBtn').addEventListener('click', () => {
+      this.exportData();
+    });
+    
+    // 导入数据按钮
+    document.getElementById('importDataBtn').addEventListener('click', () => {
+      document.getElementById('importFileInput').click();
+    });
+    
+    // 文件选择变化
+    document.getElementById('importFileInput').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        this.handleImportFile(e.target.files[0]);
+      }
     });
     
     // 点击模态框背景关闭
@@ -456,9 +473,11 @@ const App = {
           <td class="${Utils.getProfitClass(t.total_profit)}">${Utils.formatCurrency(t.total_profit, t.platform_currency, true)}</td>
           <td>${Utils.formatCurrency(t.total_fee, t.platform_currency)}</td>
           <td class="${Utils.getProfitClass(realizedProfit)}">${Utils.formatCurrency(realizedProfit, t.platform_currency, true)}</td>
-          <td class="actions">
-            <button class="btn btn-icon" onclick="App.openTransactionModal(${t.id})" title="编辑">✏️</button>
-            <button class="btn btn-icon" onclick="App.deleteTransaction(${t.id})" title="删除">🗑️</button>
+          <td>
+            <div class="actions">
+              <button class="btn btn-icon" onclick="App.openTransactionModal(${t.id})" title="编辑">✏️</button>
+              <button class="btn btn-icon" onclick="App.deleteTransaction(${t.id})" title="删除">🗑️</button>
+            </div>
           </td>
         </tr>
       `;
@@ -781,6 +800,106 @@ const App = {
       Toast.success('设置已保存');
     } catch (error) {
       Toast.error('保存设置失败: ' + error.message);
+    }
+  },
+  
+  /**
+   * 导出数据
+   */
+  async exportData() {
+    try {
+      Toast.info('正在导出数据...');
+      
+      const data = await API.settings.exportData();
+      
+      // 创建下载链接
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `finance-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      Toast.success('数据导出成功');
+    } catch (error) {
+      console.error('导出数据失败:', error);
+      Toast.error('导出数据失败: ' + error.message);
+    }
+  },
+  
+  /**
+   * 处理导入文件
+   * 默认行为：覆盖现有数据（清除交易记录和汇率）
+   */
+  async handleImportFile(file) {
+    try {
+      // 读取文件内容
+      const text = await file.text();
+      let importData;
+      
+      try {
+        importData = JSON.parse(text);
+      } catch (e) {
+        Toast.error('文件格式错误，请选择有效的JSON备份文件');
+        return;
+      }
+      
+      // 验证数据格式
+      if (!importData.data) {
+        Toast.error('无效的备份文件格式');
+        return;
+      }
+      
+      // 检查是否选择保留现有数据（默认不保留，即覆盖）
+      const keepExisting = document.getElementById('keepExistingData').checked;
+      const confirmMessage = keepExisting
+        ? '确定要导入数据吗？新数据将与现有数据合并（不推荐）。'
+        : '确定要导入数据吗？这将覆盖所有现有的交易记录和汇率数据！';
+      
+      if (!confirm(confirmMessage)) {
+        // 重置文件输入
+        document.getElementById('importFileInput').value = '';
+        return;
+      }
+      
+      Toast.info('正在导入数据...');
+      
+      // 传递 keepExisting 参数，默认为 false（覆盖模式）
+      const result = await API.settings.importData(importData.data, { keepExisting });
+      
+      // 显示导入结果
+      const summary = [];
+      if (result.result.platforms.imported > 0) {
+        summary.push(`平台: ${result.result.platforms.imported}条`);
+      }
+      if (result.result.transactions.imported > 0) {
+        summary.push(`交易记录: ${result.result.transactions.imported}条`);
+      }
+      if (result.result.exchangeRates.imported > 0) {
+        summary.push(`汇率: ${result.result.exchangeRates.imported}条`);
+      }
+      if (result.result.settings.imported > 0) {
+        summary.push(`设置: ${result.result.settings.imported}条`);
+      }
+      
+      Toast.success(`数据导入成功！${summary.length > 0 ? '导入了 ' + summary.join(', ') : ''}`);
+      
+      // 重新加载所有数据
+      await this.loadInitialData();
+      
+      // 重置文件输入
+      document.getElementById('importFileInput').value = '';
+      
+      // 关闭设置模态框
+      Modal.close('settingsModal');
+    } catch (error) {
+      console.error('导入数据失败:', error);
+      Toast.error('导入数据失败: ' + error.message);
+      // 重置文件输入
+      document.getElementById('importFileInput').value = '';
     }
   }
 };

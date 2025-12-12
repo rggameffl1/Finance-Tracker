@@ -29,13 +29,12 @@
         <span class="icon">🔄</span>
         <span>刷新汇率</span>
       </button>
-      <div class="theme-toggle" id="themeToggle" title="切换主题">
+      <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换深色/浅色主题">
         <div class="theme-toggle-track">
           <span class="theme-toggle-icon sun">☀️</span>
           <span class="theme-toggle-icon moon">🌙</span>
         </div>
-        <div class="theme-toggle-thumb"></div>
-      </div>
+      </button>
       <button class="btn btn-icon" id="settingsBtn" title="设置">
         <span class="icon">⚙️</span>
       </button>
@@ -311,6 +310,28 @@
             <option value="21600000">每6小时</option>
             <option value="86400000">每24小时</option>
           </select>
+        </div>
+        
+        <div class="settings-section">
+          <h4>数据备份与恢复</h4>
+          <p class="settings-description">导出数据用于备份，或从备份文件恢复数据。方便在新服务器上迁移数据。</p>
+          <div class="settings-buttons">
+            <button class="btn btn-primary btn-block" id="exportDataBtn">
+              <span class="icon">📤</span>
+              导出数据
+            </button>
+            <button class="btn btn-secondary btn-block" id="importDataBtn">
+              <span class="icon">📥</span>
+              导入数据
+            </button>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;">
+          </div>
+          <div class="import-options" id="importOptions" style="display: none;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="keepExistingData">
+              <span>保留现有数据（合并模式，不推荐）</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>

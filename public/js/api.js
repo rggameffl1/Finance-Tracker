@@ -258,6 +258,25 @@ const API = {
      */
     updateAll(settings) {
       return API.put('/settings', settings);
+    },
+    
+    /**
+     * 导出所有数据
+     */
+    async exportData() {
+      const response = await fetch('/api/settings/export/all');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '导出失败');
+      }
+      return response.json();
+    },
+    
+    /**
+     * 导入数据
+     */
+    importData(data, options = {}) {
+      return API.post('/settings/import/all', { data, options });
     }
   }
 };

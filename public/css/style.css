@@ -149,6 +149,107 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ========================================
+   全局自定义滚动条样式
+   ======================================== */
+
+/* Webkit 浏览器 (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+/* 浅色主题滚动条 */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.25);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.4);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:active {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+[data-theme="light"] * {
+  scrollbar-color: rgba(71, 85, 105, 0.25) transparent;
+}
+
+/* 表格容器的滚动条 */
+.table-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  margin: 0 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 3px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* 模态框内容的滚动条 */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+[data-theme="light"] .modal-content::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.3);
+}
+
+[data-theme="light"] .modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.5);
+}
+
 body {
   font-family: var(--font-family);
   background: var(--bg-primary);
@@ -584,13 +685,33 @@ html.theme-clip-animating * {
   background: var(--color-danger-light);
 }
 
-/* 盈亏颜色 */
+/* 盈亏颜色 - 默认绿涨红跌（西方风格） */
 .profit-positive {
   color: var(--color-success) !important;
 }
 
 .profit-negative {
   color: var(--color-danger) !important;
+}
+
+/* 红涨绿跌模式（中国股市风格） */
+[data-profit-color="cn"] .profit-positive {
+  color: var(--color-danger) !important;
+}
+
+[data-profit-color="cn"] .profit-negative {
+  color: var(--color-success) !important;
+}
+
+/* 开多/开空徽章在中国模式下也反转 */
+[data-profit-color="cn"] .badge-long {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+[data-profit-color="cn"] .badge-short {
+  background: var(--color-success-light);
+  color: var(--color-success);
 }
 
 /* ========================================
@@ -683,18 +804,95 @@ html.theme-clip-animating * {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
-  table-layout: fixed;
+  table-layout: auto;
+  min-width: 1200px;
 }
 
 .data-table th,
 .data-table td {
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
   border-bottom: 1px solid var(--border-color);
-  white-space: nowrap;
   vertical-align: middle;
-  height: 56px;
   box-sizing: border-box;
+}
+
+/* 表格列宽设置 */
+.data-table th:nth-child(1),
+.data-table td:nth-child(1) { /* 平台 */
+  width: 70px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(2),
+.data-table td:nth-child(2) { /* 名称/代码 */
+  width: 100px;
+}
+
+.data-table th:nth-child(3),
+.data-table td:nth-child(3) { /* 类型 */
+  width: 60px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(4),
+.data-table td:nth-child(4) { /* 方向 */
+  width: 60px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(5),
+.data-table td:nth-child(5) { /* 杠杆 */
+  width: 50px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(6),
+.data-table td:nth-child(6), /* 开仓时间 */
+.data-table th:nth-child(7),
+.data-table td:nth-child(7) { /* 平仓时间 */
+  width: 100px;
+  min-width: 100px;
+}
+
+.data-table th:nth-child(8),
+.data-table td:nth-child(8) { /* 持仓时间 */
+  width: 80px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(9),
+.data-table td:nth-child(9), /* 总盈亏 */
+.data-table th:nth-child(10),
+.data-table td:nth-child(10), /* 总费用 */
+.data-table th:nth-child(11),
+.data-table td:nth-child(11) { /* 实现盈亏 */
+  width: 90px;
+  white-space: nowrap;
+}
+
+.data-table th:nth-child(12),
+.data-table td:nth-child(12) { /* 操作 */
+  width: 80px;
+  white-space: nowrap;
+}
+
+/* 时间单元格样式 - 日期和时间分两行 */
+.data-table td .datetime-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.data-table td .datetime-cell .date {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.data-table td .datetime-cell .time {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
 }
 
 .data-table th {
@@ -777,6 +975,11 @@ html.theme-clip-animating * {
 .badge-contract {
   background: var(--color-warning-light);
   color: var(--color-warning);
+}
+
+.badge-event {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
 }
 
 /* ========================================

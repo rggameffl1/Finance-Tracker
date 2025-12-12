@@ -36,7 +36,7 @@ function addColumnIfNotExists(tableName, columnName, columnDef) {
   }
 }
 
-// 检查表是否需要重建（修复NOT NULL约束问题）
+// 检查表是否需要重建（修复NOT NULL约束问题 或 添加新的类型选项）
 function checkAndRebuildTransactionsTable() {
   try {
     const tableInfo = db.prepare(`PRAGMA table_info(transactions)`).all();
@@ -52,6 +52,32 @@ function checkAndRebuildTransactionsTable() {
       }
     }
     
+    // 检查 type 列的 CHECK 约束是否包含 '事件'
+    // SQLite 无法直接查询 CHECK 约束内容，所以我们尝试插入测试
+    if (!needsRebuild) {
+      try {
+        // 尝试检查是否支持 '事件' 类型
+        const testStmt = db.prepare(`
+          SELECT 1 WHERE '事件' IN ('合约', '现货', '事件')
+        `);
+        testStmt.get();
+        
+        // 通过创建临时测试来检查约束
+        // 如果表存在旧的CHECK约束，需要重建
+        const sqlResult = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'`).get();
+        if (sqlResult && sqlResult.sql) {
+          // 检查 CHECK 约束是否包含 '事件'
+          if (sqlResult.sql.includes("CHECK(type IN ('合约', '现货'))") &&
+              !sqlResult.sql.includes("'事件'")) {
+            console.log('发现 type 列的 CHECK 约束不包含 "事件"，需要重建表');
+            needsRebuild = true;
+          }
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+    }
+    
     if (needsRebuild) {
       console.log('\n正在重建 transactions 表以修复约束问题...');
       
@@ -59,14 +85,14 @@ function checkAndRebuildTransactionsTable() {
       db.exec('BEGIN TRANSACTION');
       
       try {
-        // 1. 创建新表
+        // 1. 创建新表（包含 '事件' 类型）
         db.exec(`
           CREATE TABLE IF NOT EXISTS transactions_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             platform_id INTEGER NOT NULL,
             asset_name TEXT NOT NULL,
             asset_code TEXT NOT NULL,
-            type TEXT NOT NULL CHECK(type IN ('合约', '现货')),
+            type TEXT NOT NULL CHECK(type IN ('合约', '现货', '事件')),
             direction TEXT NOT NULL CHECK(direction IN ('开多', '开空')),
             leverage TEXT NOT NULL DEFAULT '1',
             quantity TEXT,
@@ -111,7 +137,7 @@ function checkAndRebuildTransactionsTable() {
         `);
         
         db.exec('COMMIT');
-        console.log('✓ transactions 表重建成功');
+        console.log('✓ transactions 表重建成功（支持 合约/现货/事件 类型）');
       } catch (error) {
         db.exec('ROLLBACK');
         throw error;

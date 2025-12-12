@@ -147,8 +147,8 @@ router.post('/', (req, res) => {
     }
     
     // 验证类型
-    if (!['合约', '现货'].includes(type)) {
-      return res.status(400).json({ error: '类型必须是 合约 或 现货' });
+    if (!['合约', '现货', '事件'].includes(type)) {
+      return res.status(400).json({ error: '类型必须是 合约、现货 或 事件' });
     }
     
     // 验证方向
@@ -228,8 +228,8 @@ router.put('/:id', (req, res) => {
     }
     
     // 验证类型
-    if (type && !['合约', '现货'].includes(type)) {
-      return res.status(400).json({ error: '类型必须是 合约 或 现货' });
+    if (type && !['合约', '现货', '事件'].includes(type)) {
+      return res.status(400).json({ error: '类型必须是 合约、现货 或 事件' });
     }
     
     // 验证方向

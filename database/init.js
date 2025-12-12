@@ -41,7 +41,7 @@ db.exec(`
     platform_id INTEGER NOT NULL,
     asset_name TEXT NOT NULL,
     asset_code TEXT NOT NULL,
-    type TEXT NOT NULL CHECK(type IN ('合约', '现货')),
+    type TEXT NOT NULL CHECK(type IN ('合约', '现货', '事件')),
     direction TEXT NOT NULL CHECK(direction IN ('开多', '开空')),
     leverage TEXT NOT NULL DEFAULT '1',
     quantity TEXT,

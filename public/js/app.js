@@ -123,6 +123,11 @@ const App = {
       this.updateSetting('exchange_rate_update_interval', e.target.value);
     });
     
+    // 涨跌颜色模式设置
+    document.getElementById('profitColorMode').addEventListener('change', (e) => {
+      this.updateProfitColorMode(e.target.value);
+    });
+    
     // 自动计算持仓量按钮
     document.getElementById('calcQuantityBtn').addEventListener('click', () => {
       this.calculateQuantity();
@@ -161,11 +166,12 @@ const App = {
   },
   
   /**
-   * 自动计算持仓量（投入资金 / 开仓价格）
+   * 自动计算持仓量（投入资金 × 杠杆 / 开仓价格）
    */
   calculateQuantity() {
     const investment = document.getElementById('investment').value;
     const openPrice = document.getElementById('openPrice').value;
+    const leverage = document.getElementById('leverage').value || '1';
     
     if (!investment || !openPrice) {
       Toast.warning('请先填写投入资金和开仓价格');
@@ -174,16 +180,22 @@ const App = {
     
     const investmentNum = parseFloat(investment);
     const openPriceNum = parseFloat(openPrice);
+    const leverageNum = parseFloat(leverage) || 1;
     
     if (isNaN(investmentNum) || isNaN(openPriceNum) || openPriceNum === 0) {
       Toast.warning('投入资金和开仓价格必须是有效数字，且开仓价格不能为0');
       return;
     }
     
-    // 计算持仓量，保持高精度
-    const quantity = investmentNum / openPriceNum;
+    if (leverageNum <= 0) {
+      Toast.warning('杠杆必须大于0');
+      return;
+    }
+    
+    // 计算持仓量：投入资金 × 杠杆 / 开仓价格，保持高精度
+    const quantity = (investmentNum * leverageNum) / openPriceNum;
     document.getElementById('quantity').value = quantity.toString();
-    Toast.success('持仓量已自动计算');
+    Toast.success(`持仓量已自动计算（杠杆: ${leverageNum}x）`);
   },
   
   /**
@@ -268,6 +280,11 @@ const App = {
       if (this.state.settings.exchange_rate_update_interval) {
         document.getElementById('updateInterval').value = this.state.settings.exchange_rate_update_interval;
       }
+      
+      // 应用涨跌颜色模式
+      const profitColorMode = this.state.settings.profit_color_mode || 'us';
+      this.applyProfitColorMode(profitColorMode);
+      document.getElementById('profitColorMode').value = profitColorMode;
     } catch (error) {
       console.error('加载设置失败:', error);
     }
@@ -448,7 +465,7 @@ const App = {
     tbody.innerHTML = this.state.transactions.map(t => {
       const realizedProfit = t.realized_profit;
       const directionClass = t.direction === '开多' ? 'badge-long' : 'badge-short';
-      const typeClass = t.type === '现货' ? 'badge-spot' : 'badge-contract';
+      const typeClass = t.type === '现货' ? 'badge-spot' : (t.type === '事件' ? 'badge-event' : 'badge-contract');
       
       // 格式化价格显示
       const openPriceDisplay = t.open_price ? Utils.formatCurrency(t.open_price, t.platform_currency) : '--';
@@ -467,8 +484,8 @@ const App = {
           <td><span class="badge ${typeClass}">${t.type}</span></td>
           <td><span class="badge ${directionClass}">${t.direction}</span></td>
           <td>${t.leverage}x</td>
-          <td>${Utils.formatDateTime(t.open_time)}</td>
-          <td>${Utils.formatDateTime(t.close_time)}</td>
+          <td>${Utils.formatDateTimeHTML(t.open_time)}</td>
+          <td>${Utils.formatDateTimeHTML(t.close_time)}</td>
           <td>${t.holding_time || '--'}</td>
           <td class="${Utils.getProfitClass(t.total_profit)}">${Utils.formatCurrency(t.total_profit, t.platform_currency, true)}</td>
           <td>${Utils.formatCurrency(t.total_fee, t.platform_currency)}</td>
@@ -804,13 +821,46 @@ const App = {
   },
   
   /**
-   * 导出数据
+   * 更新涨跌颜色模式
+   */
+  async updateProfitColorMode(mode) {
+    try {
+      await API.settings.update('profit_color_mode', mode);
+      this.state.settings.profit_color_mode = mode;
+      this.applyProfitColorMode(mode);
+      Toast.success('涨跌颜色设置已保存');
+    } catch (error) {
+      Toast.error('保存设置失败: ' + error.message);
+    }
+  },
+  
+  /**
+   * 应用涨跌颜色模式
+   */
+  applyProfitColorMode(mode) {
+    // 设置 data-profit-color 属性到 html 元素
+    document.documentElement.setAttribute('data-profit-color', mode);
+  },
+  
+  /**
+   * 导出数据（不含汇率，汇率会自动从网络获取）
    */
   async exportData() {
     try {
-      Toast.info('正在导出数据...');
+      const exportBtn = document.getElementById('exportDataBtn');
+      const originalText = exportBtn.innerHTML;
+      
+      // 显示导出中状态
+      exportBtn.disabled = true;
+      exportBtn.innerHTML = '<span class="icon">⏳</span> 导出中...';
+      Toast.info('正在导出数据，请稍候...');
       
       const data = await API.settings.exportData();
+      
+      // 统计数据量
+      const transactionCount = data.data?.transactions?.length || 0;
+      const platformCount = data.data?.platforms?.length || 0;
+      const settingCount = data.data?.settings?.length || 0;
       
       // 创建下载链接
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -823,19 +873,41 @@ const App = {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      Toast.success('数据导出成功');
+      // 恢复按钮状态
+      exportBtn.disabled = false;
+      exportBtn.innerHTML = originalText;
+      
+      Toast.success(`数据导出成功！共导出 ${transactionCount} 条交易记录、${platformCount} 个平台、${settingCount} 项设置`);
     } catch (error) {
       console.error('导出数据失败:', error);
       Toast.error('导出数据失败: ' + error.message);
+      
+      // 恢复按钮状态
+      const exportBtn = document.getElementById('exportDataBtn');
+      exportBtn.disabled = false;
+      exportBtn.innerHTML = '<span class="icon">📤</span> 导出数据';
     }
   },
   
   /**
    * 处理导入文件
-   * 默认行为：覆盖现有数据（清除交易记录和汇率）
+   * 默认行为：覆盖现有交易记录数据（不含汇率，汇率会自动从网络获取）
    */
   async handleImportFile(file) {
+    const importBtn = document.getElementById('importDataBtn');
+    const originalText = importBtn.innerHTML;
+    
     try {
+      // 检查文件大小，给出提示
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      if (file.size > 10 * 1024 * 1024) { // 大于10MB
+        Toast.warning(`文件较大 (${fileSizeMB}MB)，导入可能需要较长时间，请耐心等待...`);
+      }
+      
+      // 显示读取中状态
+      importBtn.disabled = true;
+      importBtn.innerHTML = '<span class="icon">⏳</span> 读取中...';
+      
       // 读取文件内容
       const text = await file.text();
       let importData;
@@ -844,28 +916,46 @@ const App = {
         importData = JSON.parse(text);
       } catch (e) {
         Toast.error('文件格式错误，请选择有效的JSON备份文件');
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
         return;
       }
       
       // 验证数据格式
       if (!importData.data) {
         Toast.error('无效的备份文件格式');
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
         return;
       }
+      
+      // 统计待导入数据量
+      const transactionCount = importData.data?.transactions?.length || 0;
+      const platformCount = importData.data?.platforms?.length || 0;
+      const settingCount = importData.data?.settings?.length || 0;
       
       // 检查是否选择保留现有数据（默认不保留，即覆盖）
       const keepExisting = document.getElementById('keepExistingData').checked;
       const confirmMessage = keepExisting
-        ? '确定要导入数据吗？新数据将与现有数据合并（不推荐）。'
-        : '确定要导入数据吗？这将覆盖所有现有的交易记录和汇率数据！';
+        ? `确定要导入数据吗？\n\n待导入：${transactionCount} 条交易记录、${platformCount} 个平台配置、${settingCount} 项设置\n\n新数据将与现有数据合并（不推荐）。`
+        : `确定要导入数据吗？\n\n待导入：${transactionCount} 条交易记录、${platformCount} 个平台配置、${settingCount} 项设置\n\n⚠️ 这将覆盖所有现有的交易记录！`;
       
       if (!confirm(confirmMessage)) {
-        // 重置文件输入
+        // 重置文件输入和按钮状态
         document.getElementById('importFileInput').value = '';
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
         return;
       }
       
-      Toast.info('正在导入数据...');
+      // 显示导入中状态
+      importBtn.innerHTML = '<span class="icon">⏳</span> 导入中...';
+      
+      if (transactionCount > 1000) {
+        Toast.info(`正在导入 ${transactionCount} 条交易记录，请耐心等待...`, 5000);
+      } else {
+        Toast.info('正在导入数据...');
+      }
       
       // 传递 keepExisting 参数，默认为 false（覆盖模式）
       const result = await API.settings.importData(importData.data, { keepExisting });
@@ -878,28 +968,43 @@ const App = {
       if (result.result.transactions.imported > 0) {
         summary.push(`交易记录: ${result.result.transactions.imported}条`);
       }
-      if (result.result.exchangeRates.imported > 0) {
-        summary.push(`汇率: ${result.result.exchangeRates.imported}条`);
-      }
       if (result.result.settings.imported > 0) {
         summary.push(`设置: ${result.result.settings.imported}条`);
       }
       
-      Toast.success(`数据导入成功！${summary.length > 0 ? '导入了 ' + summary.join(', ') : ''}`);
+      // 显示跳过的数据
+      const skipped = [];
+      if (result.result.platforms.skipped > 0) {
+        skipped.push(`平台: ${result.result.platforms.skipped}条`);
+      }
+      if (result.result.transactions.skipped > 0) {
+        skipped.push(`交易记录: ${result.result.transactions.skipped}条`);
+      }
+      
+      let message = `数据导入成功！${summary.length > 0 ? '导入了 ' + summary.join(', ') : ''}`;
+      if (skipped.length > 0) {
+        message += `（跳过 ${skipped.join(', ')}）`;
+      }
+      
+      Toast.success(message, 5000);
       
       // 重新加载所有数据
       await this.loadInitialData();
       
-      // 重置文件输入
+      // 重置文件输入和按钮状态
       document.getElementById('importFileInput').value = '';
+      importBtn.disabled = false;
+      importBtn.innerHTML = originalText;
       
       // 关闭设置模态框
       Modal.close('settingsModal');
     } catch (error) {
       console.error('导入数据失败:', error);
       Toast.error('导入数据失败: ' + error.message);
-      // 重置文件输入
+      // 重置文件输入和按钮状态
       document.getElementById('importFileInput').value = '';
+      importBtn.disabled = false;
+      importBtn.innerHTML = originalText;
     }
   }
 };

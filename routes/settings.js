@@ -124,9 +124,10 @@ router.delete('/:key', (req, res) => {
 
 // ========================================
 // 数据导入导出功能（性能优化版）
+// 不包含汇率数据，汇率会自动从网络获取
 // ========================================
 
-// 导出所有数据（流式处理，优化内存使用）
+// 导出所有数据（流式处理，优化内存使用，不含汇率）
 router.get('/export/all', (req, res) => {
   try {
     // 设置响应头，触发文件下载
@@ -135,7 +136,7 @@ router.get('/export/all', (req, res) => {
     
     // 使用流式写入，减少内存占用
     res.write('{\n');
-    res.write(`  "version": "1.0",\n`);
+    res.write(`  "version": "1.1",\n`);
     res.write(`  "exportTime": "${new Date().toISOString()}",\n`);
     res.write(`  "data": {\n`);
     
@@ -148,12 +149,12 @@ router.get('/export/all', (req, res) => {
     res.write(`    "transactions": [`);
     
     if (transactionCount > 0) {
-      const batchSize = 1000;
+      const batchSize = 500; // 减小批次大小，提高响应性
       let offset = 0;
       let isFirst = true;
       
       while (offset < transactionCount) {
-        const batch = db.prepare('SELECT * FROM transactions LIMIT ? OFFSET ?').all(batchSize, offset);
+        const batch = db.prepare('SELECT * FROM transactions ORDER BY id LIMIT ? OFFSET ?').all(batchSize, offset);
         
         batch.forEach((t, index) => {
           if (!isFirst || index > 0) {
@@ -169,11 +170,7 @@ router.get('/export/all', (req, res) => {
     
     res.write(`],\n`);
     
-    // 导出汇率数据
-    const exchangeRates = db.prepare('SELECT * FROM exchange_rates').all();
-    res.write(`    "exchangeRates": ${JSON.stringify(exchangeRates)},\n`);
-    
-    // 导出设置
+    // 导出设置（不包含汇率数据）
     const settings = db.prepare('SELECT * FROM settings').all();
     res.write(`    "settings": ${JSON.stringify(settings)}\n`);
     
@@ -186,8 +183,8 @@ router.get('/export/all', (req, res) => {
   }
 });
 
-// 导入数据（分批处理，优化性能）
-// 默认行为：覆盖现有数据（清除交易记录和汇率，保留平台配置）
+// 导入数据（分批处理，优化性能，不含汇率）
+// 默认行为：覆盖现有交易记录数据，保留平台配置
 router.post('/import/all', (req, res) => {
   try {
     const { data, options = {} } = req.body;
@@ -196,14 +193,13 @@ router.post('/import/all', (req, res) => {
       return res.status(400).json({ error: '请提供导入数据' });
     }
     
-    const { platforms, transactions, exchangeRates, settings } = data;
-    // 默认覆盖模式（clearExisting = true），除非明确指定保留
+    const { platforms, transactions, settings } = data;
+    // 默认覆盖模式，除非明确指定保留
     const { keepExisting = false } = options;
     
     const result = {
       platforms: { imported: 0, skipped: 0 },
       transactions: { imported: 0, skipped: 0 },
-      exchangeRates: { imported: 0, skipped: 0 },
       settings: { imported: 0, skipped: 0 }
     };
     
@@ -222,22 +218,16 @@ router.post('/import/all', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    const upsertRateStmt = db.prepare(`
-      INSERT OR REPLACE INTO exchange_rates (from_currency, to_currency, rate, updated_at)
-      VALUES (?, ?, ?, ?)
-    `);
-    
     const upsertSettingStmt = db.prepare(`
       INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
     `);
     
-    // 使用事务确保数据一致性，分批处理大数据
+    // 使用事务确保数据一致性
     const importAll = db.transaction(() => {
-      // 默认覆盖模式：清除现有交易记录和汇率数据
+      // 默认覆盖模式：清除现有交易记录数据
       // 只有当 keepExisting = true 时才保留现有数据
       if (!keepExisting) {
         db.prepare('DELETE FROM transactions').run();
-        db.prepare('DELETE FROM exchange_rates').run();
       }
       
       // 导入平台数据（更新初始资金）
@@ -257,61 +247,50 @@ router.post('/import/all', (req, res) => {
         });
       }
       
-      // 导入交易记录（分批处理）
+      // 导入交易记录
       if (transactions && Array.isArray(transactions)) {
         // 预先获取所有有效平台ID
         const validPlatformIds = new Set(
           db.prepare('SELECT id FROM platforms').all().map(p => p.id)
         );
         
-        transactions.forEach(t => {
-          try {
-            // 快速检查平台是否存在
-            if (!validPlatformIds.has(t.platform_id)) {
+        // 分批处理，每批500条，避免长时间阻塞
+        const batchSize = 500;
+        for (let i = 0; i < transactions.length; i += batchSize) {
+          const batch = transactions.slice(i, i + batchSize);
+          
+          batch.forEach(t => {
+            try {
+              // 快速检查平台是否存在
+              if (!validPlatformIds.has(t.platform_id)) {
+                result.transactions.skipped++;
+                return;
+              }
+              
+              insertTransactionStmt.run(
+                t.platform_id,
+                t.asset_name,
+                t.asset_code,
+                t.type,
+                t.direction,
+                t.leverage || '1',
+                t.quantity,
+                t.open_price,
+                t.close_price,
+                t.investment,
+                t.open_time,
+                t.close_time,
+                t.total_profit || '0',
+                t.total_fee || '0',
+                t.reason
+              );
+              result.transactions.imported++;
+            } catch (e) {
+              console.error('导入交易记录失败:', e.message);
               result.transactions.skipped++;
-              return;
             }
-            
-            insertTransactionStmt.run(
-              t.platform_id,
-              t.asset_name,
-              t.asset_code,
-              t.type,
-              t.direction,
-              t.leverage || '1',
-              t.quantity,
-              t.open_price,
-              t.close_price,
-              t.investment,
-              t.open_time,
-              t.close_time,
-              t.total_profit || '0',
-              t.total_fee || '0',
-              t.reason
-            );
-            result.transactions.imported++;
-          } catch (e) {
-            console.error('导入交易记录失败:', e.message);
-            result.transactions.skipped++;
-          }
-        });
-      }
-      
-      // 导入汇率数据
-      if (exchangeRates && Array.isArray(exchangeRates)) {
-        exchangeRates.forEach(rate => {
-          try {
-            upsertRateStmt.run(
-              rate.from_currency,
-              rate.to_currency,
-              rate.rate,
-              rate.updated_at || new Date().toISOString()
-            );
-            result.exchangeRates.imported++;
-          } catch (e) {
-            result.exchangeRates.skipped++;
-          }
-        });
+          });
+        }
       }
       
       // 导入设置

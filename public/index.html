@@ -172,6 +172,7 @@
             <select id="type" required>
               <option value="现货">现货</option>
               <option value="合约">合约</option>
+              <option value="事件">事件</option>
             </select>
           </div>
         </div>
@@ -313,8 +314,17 @@
         </div>
         
         <div class="settings-section">
+          <h4>涨跌颜色</h4>
+          <select id="profitColorMode" class="form-control">
+            <option value="us">绿涨红跌（美股风格）</option>
+            <option value="cn">红涨绿跌（A股风格）</option>
+          </select>
+          <p class="settings-description" style="margin-top: 8px;">选择盈亏显示的颜色风格</p>
+        </div>
+        
+        <div class="settings-section">
           <h4>数据备份与恢复</h4>
-          <p class="settings-description">导出数据用于备份，或从备份文件恢复数据。方便在新服务器上迁移数据。</p>
+          <p class="settings-description">导出平台配置、交易记录和设置用于备份，或从备份文件恢复数据。汇率数据会自动从网络获取，无需备份。</p>
           <div class="settings-buttons">
             <button class="btn btn-primary btn-block" id="exportDataBtn">
               <span class="icon">📤</span>
@@ -326,7 +336,7 @@
             </button>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
           </div>
-          <div class="import-options" id="importOptions" style="display: none;">
+          <div class="import-options">
             <label class="checkbox-label">
               <input type="checkbox" id="keepExistingData">
               <span>保留现有数据（合并模式，不推荐）</span>

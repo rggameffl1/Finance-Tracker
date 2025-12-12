@@ -79,6 +79,28 @@ const Utils = {
   },
   
   /**
+   * 格式化日期时间为两行显示（HTML格式）
+   * 返回带有日期和时间分开的HTML结构
+   */
+  formatDateTimeHTML(dateStr) {
+    if (!dateStr) return '--';
+    
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '--';
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    const dateText = `${year}/${month}/${day}`;
+    const timeText = `${hours}:${minutes}`;
+    
+    return `<div class="datetime-cell"><span class="date">${dateText}</span><span class="time">${timeText}</span></div>`;
+  },
+  
+  /**
    * 格式化日期时间为input[datetime-local]格式
    */
   formatDateTimeLocal(dateStr) {

@@ -277,6 +277,20 @@ const API = {
      */
     importData(data, options = {}) {
       return API.post('/settings/import/all', { data, options });
+    },
+    
+    /**
+     * 获取数据库状态
+     */
+    getDatabaseStatus() {
+      return API.get('/settings/database/status');
+    },
+    
+    /**
+     * 优化数据库
+     */
+    optimizeDatabase() {
+      return API.post('/settings/database/optimize');
     }
   }
 };

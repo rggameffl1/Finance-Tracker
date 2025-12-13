@@ -150,6 +150,11 @@ const App = {
       }
     });
     
+    // 数据库优化按钮
+    document.getElementById('optimizeDatabaseBtn').addEventListener('click', () => {
+      this.optimizeDatabase();
+    });
+    
     // 点击模态框背景关闭
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', () => {
@@ -805,7 +810,71 @@ const App = {
    */
   openSettingsModal() {
     this.renderExchangeRates();
+    this.loadDatabaseStatus();
     Modal.open('settingsModal');
+  },
+  
+  /**
+   * 加载数据库状态
+   */
+  async loadDatabaseStatus() {
+    try {
+      const status = await API.settings.getDatabaseStatus();
+      
+      // 更新交易记录数（API返回的是 tables.transactions）
+      const transactionCount = status.tables?.transactions || 0;
+      document.getElementById('dbTransactionCount').textContent =
+        transactionCount.toLocaleString() + ' 条';
+      
+      // 更新数据库大小
+      const dbSize = status.database_size || 0;
+      const sizeKB = dbSize / 1024;
+      const sizeMB = sizeKB / 1024;
+      document.getElementById('dbSize').textContent =
+        dbSize === 0 ? '未知' : (sizeMB >= 1 ? `${sizeMB.toFixed(2)} MB` : `${sizeKB.toFixed(2)} KB`);
+      
+      // 更新索引状态
+      const indexEl = document.getElementById('dbIndexStatus');
+      if (status.indexes && status.indexes.length > 0) {
+        indexEl.textContent = `${status.indexes.length} 个索引`;
+        indexEl.className = 'status-value success';
+      } else {
+        indexEl.textContent = '无索引';
+        indexEl.className = 'status-value warning';
+      }
+    } catch (error) {
+      console.error('加载数据库状态失败:', error);
+      document.getElementById('dbTransactionCount').textContent = '加载失败';
+      document.getElementById('dbSize').textContent = '加载失败';
+      document.getElementById('dbIndexStatus').textContent = '加载失败';
+    }
+  },
+  
+  /**
+   * 优化数据库
+   */
+  async optimizeDatabase() {
+    const btn = document.getElementById('optimizeDatabaseBtn');
+    const originalText = btn.innerHTML;
+    
+    try {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="icon">⏳</span> 优化中...';
+      Toast.info('正在优化数据库...');
+      
+      const result = await API.settings.optimizeDatabase();
+      
+      Toast.success('数据库优化完成');
+      
+      // 重新加载数据库状态
+      await this.loadDatabaseStatus();
+    } catch (error) {
+      console.error('数据库优化失败:', error);
+      Toast.error('数据库优化失败: ' + error.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   },
   
   /**

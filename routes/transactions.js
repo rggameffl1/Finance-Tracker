@@ -44,11 +44,19 @@ function formatTransaction(t) {
   };
 }
 
-// 获取所有交易记录
+// 获取所有交易记录（支持传统分页和游标分页）
 router.get('/', (req, res) => {
   try {
-    const { platform_id, page = 1, limit = 50 } = req.query;
-    const offset = (page - 1) * limit;
+    const { platform_id, page = 1, limit = 50, cursor, cursor_id } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 50, 100); // 最大100条
+    
+    // 使用游标分页（更高效，适合大数据量）
+    if (cursor) {
+      return handleCursorPagination(req, res, platform_id, cursor, cursor_id, limitNum);
+    }
+    
+    // 传统 OFFSET 分页（兼容现有前端）
+    const offset = (parseInt(page) - 1) * limitNum;
     
     let query = `
       SELECT t.*, p.name as platform_name, p.currency as platform_currency
@@ -67,20 +75,32 @@ router.get('/', (req, res) => {
     }
     
     query += ' ORDER BY t.open_time DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limitNum, offset);
     
     const transactions = db.prepare(query).all(...params);
     const { total } = db.prepare(countQuery).get(...countParams);
     
     const result = transactions.map(formatTransaction);
     
+    // 生成游标信息（供前端切换到游标分页时使用）
+    const lastItem = transactions[transactions.length - 1];
+    const nextCursor = lastItem ? {
+      open_time: lastItem.open_time,
+      id: lastItem.id
+    } : null;
+    
     res.json({
       data: result,
       pagination: {
         page: parseInt(page),
-        limit: parseInt(limit),
+        limit: limitNum,
         total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limitNum)
+      },
+      // 游标分页信息（可选使用）
+      cursor_info: {
+        next_cursor: nextCursor ? Buffer.from(JSON.stringify(nextCursor)).toString('base64') : null,
+        has_more: offset + transactions.length < total
       }
     });
   } catch (error) {
@@ -88,6 +108,66 @@ router.get('/', (req, res) => {
     res.status(500).json({ error: '获取交易记录失败', message: error.message });
   }
 });
+
+// 游标分页处理函数（更高效，适合大数据量）
+function handleCursorPagination(req, res, platform_id, cursor, cursor_id, limit) {
+  try {
+    // 解析游标
+    let cursorData = null;
+    try {
+      cursorData = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
+    } catch (e) {
+      return res.status(400).json({ error: '无效的游标' });
+    }
+    
+    const { open_time, id } = cursorData;
+    
+    // 构建查询（使用索引优化）
+    let query = `
+      SELECT t.*, p.name as platform_name, p.currency as platform_currency
+      FROM transactions t
+      JOIN platforms p ON t.platform_id = p.id
+      WHERE (t.open_time < ? OR (t.open_time = ? AND t.id < ?))
+    `;
+    const params = [open_time, open_time, id];
+    
+    if (platform_id) {
+      query += ' AND t.platform_id = ?';
+      params.push(platform_id);
+    }
+    
+    query += ' ORDER BY t.open_time DESC, t.id DESC LIMIT ?';
+    params.push(limit + 1); // 多取一条判断是否有下一页
+    
+    const transactions = db.prepare(query).all(...params);
+    
+    // 判断是否有更多数据
+    const hasMore = transactions.length > limit;
+    if (hasMore) {
+      transactions.pop(); // 移除多取的那一条
+    }
+    
+    const result = transactions.map(formatTransaction);
+    
+    // 生成下一页游标
+    const lastItem = transactions[transactions.length - 1];
+    const nextCursor = lastItem && hasMore ? {
+      open_time: lastItem.open_time,
+      id: lastItem.id
+    } : null;
+    
+    res.json({
+      data: result,
+      cursor_info: {
+        next_cursor: nextCursor ? Buffer.from(JSON.stringify(nextCursor)).toString('base64') : null,
+        has_more: hasMore
+      }
+    });
+  } catch (error) {
+    console.error('游标分页查询失败:', error);
+    res.status(500).json({ error: '获取交易记录失败', message: error.message });
+  }
+}
 
 // 获取单个交易记录
 router.get('/:id', (req, res) => {

@@ -1,9 +1,9 @@
 // {{CODE-Cycle-Integration:
-//   Task_ID: #T015-T019
-//   Timestamp: 2025-12-09T04:41:00Z
+//   Task_ID: #T015-T030
+//   Timestamp: 2025-12-13T03:09:00Z
 //   Phase: D-Develop
-//   Context-Analysis: "数据库迁移脚本 - 修复表结构，确保所有列允许NULL"
-//   Principle_Applied: "KISS, Safe Migration"
+//   Context-Analysis: "数据库迁移脚本 - 修复表结构，确保所有列允许NULL，添加性能优化索引"
+//   Principle_Applied: "KISS, Safe Migration, Performance Optimization"
 // }}
 // {{START_MODIFICATIONS}}
 
@@ -33,6 +33,33 @@ function addColumnIfNotExists(tableName, columnName, columnDef) {
     }
   } catch (error) {
     console.error(`✗ 添加列 ${tableName}.${columnName} 失败:`, error.message);
+  }
+}
+
+// 检查索引是否存在
+function indexExists(indexName) {
+  const result = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'index' AND name = ?
+  `).get(indexName);
+  return !!result;
+}
+
+// 创建索引的辅助函数
+function createIndexIfNotExists(indexName, tableName, columns, descending = false) {
+  try {
+    if (!indexExists(indexName)) {
+      const columnDef = descending ? `${columns} DESC` : columns;
+      db.exec(`CREATE INDEX ${indexName} ON ${tableName}(${columnDef})`);
+      console.log(`✓ 创建索引 ${indexName} 成功`);
+      return true;
+    } else {
+      console.log(`- 索引 ${indexName} 已存在，跳过`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`✗ 创建索引 ${indexName} 失败:`, error.message);
+    return false;
   }
 }
 
@@ -160,6 +187,65 @@ addColumnIfNotExists('transactions', 'investment', 'TEXT'); // 投入资金，�
 // 检查并修复表结构
 console.log('\n--- 检查表结构 ---');
 checkAndRebuildTransactionsTable();
+
+// 创建性能优化索引
+console.log('\n--- 创建性能优化索引 ---');
+let indexCount = 0;
+
+// 1. 平台ID索引 - 优化按平台筛选查询
+if (createIndexIfNotExists('idx_transactions_platform_id', 'transactions', 'platform_id')) {
+  indexCount++;
+}
+
+// 2. 开仓时间索引 - 优化按时间排序和范围查询
+if (createIndexIfNotExists('idx_transactions_open_time', 'transactions', 'open_time', true)) {
+  indexCount++;
+}
+
+// 3. 复合索引（平台+时间）- 优化同时按平台筛选和时间排序（最常用的查询模式）
+if (createIndexIfNotExists('idx_transactions_platform_time', 'transactions', 'platform_id, open_time DESC')) {
+  indexCount++;
+}
+
+// 4. 资产代码索引 - 优化按资产搜索
+if (createIndexIfNotExists('idx_transactions_asset_code', 'transactions', 'asset_code')) {
+  indexCount++;
+}
+
+// 5. 平仓时间索引 - 优化按平仓时间查询（用于归档等场景）
+if (createIndexIfNotExists('idx_transactions_close_time', 'transactions', 'close_time')) {
+  indexCount++;
+}
+
+if (indexCount > 0) {
+  console.log(`\n✓ 共创建 ${indexCount} 个新索引`);
+}
+
+// 显示当前索引状态
+console.log('\n--- 当前数据库索引状态 ---');
+const indexes = db.prepare(`
+  SELECT name, tbl_name
+  FROM sqlite_master
+  WHERE type = 'index' AND sql IS NOT NULL
+  ORDER BY tbl_name, name
+`).all();
+
+if (indexes.length > 0) {
+  indexes.forEach(idx => {
+    console.log(`  - ${idx.name} (表: ${idx.tbl_name})`);
+  });
+} else {
+  console.log('  无自定义索引');
+}
+
+// 执行数据库优化
+console.log('\n--- 执行数据库优化 ---');
+try {
+  db.exec('ANALYZE');
+  console.log('✓ 已更新数据库统计信息 (ANALYZE)');
+} catch (error) {
+  console.error('✗ ANALYZE 失败:', error.message);
+}
 
 // 关闭数据库连接
 db.close();

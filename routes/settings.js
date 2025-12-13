@@ -308,6 +308,13 @@ router.post('/import/all', (req, res) => {
     
     importAll();
     
+    // 导入完成后更新索引统计信息（优化查询性能）
+    try {
+      db.exec('ANALYZE');
+    } catch (e) {
+      console.warn('ANALYZE 执行失败:', e.message);
+    }
+    
     res.json({
       message: '数据导入成功',
       result
@@ -317,6 +324,81 @@ router.post('/import/all', (req, res) => {
     res.status(500).json({ error: '导入数据失败', message: error.message });
   }
 });
+
+// 获取数据库状态信息
+router.get('/database/status', (req, res) => {
+  try {
+    // 获取表记录数
+    const transactionCount = db.prepare('SELECT COUNT(*) as count FROM transactions').get().count;
+    const platformCount = db.prepare('SELECT COUNT(*) as count FROM platforms').get().count;
+    const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
+    
+    // 获取索引信息
+    const indexes = db.prepare(`
+      SELECT name, tbl_name
+      FROM sqlite_master
+      WHERE type = 'index' AND sql IS NOT NULL
+      ORDER BY tbl_name, name
+    `).all();
+    
+    // 获取数据库文件大小
+    const path = require('path');
+    const fs = require('fs');
+    const dbPath = path.join(__dirname, '../database/finance.db');
+    let dbSize = 0;
+    try {
+      const stats = fs.statSync(dbPath);
+      dbSize = stats.size;
+    } catch (e) {
+      // 忽略错误
+    }
+    
+    res.json({
+      tables: {
+        transactions: transactionCount,
+        platforms: platformCount,
+        settings: settingCount
+      },
+      indexes: indexes.map(idx => ({
+        name: idx.name,
+        table: idx.tbl_name
+      })),
+      database_size: dbSize,
+      database_size_formatted: formatBytes(dbSize)
+    });
+  } catch (error) {
+    console.error('获取数据库状态失败:', error);
+    res.status(500).json({ error: '获取数据库状态失败', message: error.message });
+  }
+});
+
+// 优化数据库
+router.post('/database/optimize', (req, res) => {
+  try {
+    // 更新索引统计信息
+    db.exec('ANALYZE');
+    
+    // 清理未使用的空间
+    db.exec('VACUUM');
+    
+    res.json({
+      message: '数据库优化完成',
+      operations: ['ANALYZE', 'VACUUM']
+    });
+  } catch (error) {
+    console.error('数据库优化失败:', error);
+    res.status(500).json({ error: '数据库优化失败', message: error.message });
+  }
+});
+
+// 格式化字节数
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 module.exports = router;
 

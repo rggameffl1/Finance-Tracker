@@ -343,6 +343,29 @@
             </label>
           </div>
         </div>
+        
+        <div class="settings-section">
+          <h4>数据库维护</h4>
+          <div class="database-status" id="databaseStatus">
+            <div class="status-row">
+              <span class="status-label">交易记录数：</span>
+              <span class="status-value" id="dbTransactionCount">--</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">数据库大小：</span>
+              <span class="status-value" id="dbSize">--</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">索引状态：</span>
+              <span class="status-value" id="dbIndexStatus">--</span>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-block" id="optimizeDatabaseBtn">
+            <span class="icon">🔧</span>
+            优化数据库
+          </button>
+          <p class="settings-description" style="margin-top: 8px;">执行 ANALYZE 和 VACUUM 操作优化数据库性能</p>
+        </div>
       </div>
     </div>
   </div>

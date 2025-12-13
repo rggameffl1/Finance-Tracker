@@ -60,6 +60,44 @@ db.exec(`
 `);
 console.log('✓ transactions 表创建成功');
 
+// 创建索引以优化查询性能
+console.log('正在创建索引...');
+
+// 1. 平台ID索引 - 优化按平台筛选
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_transactions_platform_id
+  ON transactions(platform_id)
+`);
+console.log('✓ idx_transactions_platform_id 索引创建成功');
+
+// 2. 开仓时间索引 - 优化按时间排序和范围查询
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_transactions_open_time
+  ON transactions(open_time DESC)
+`);
+console.log('✓ idx_transactions_open_time 索引创建成功');
+
+// 3. 复合索引 - 优化同时按平台筛选和时间排序（最常用的查询模式）
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_transactions_platform_time
+  ON transactions(platform_id, open_time DESC)
+`);
+console.log('✓ idx_transactions_platform_time 复合索引创建成功');
+
+// 4. 资产代码索引 - 优化按资产搜索
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_transactions_asset_code
+  ON transactions(asset_code)
+`);
+console.log('✓ idx_transactions_asset_code 索引创建成功');
+
+// 5. 平仓时间索引 - 优化按平仓时间查询（用于归档等场景）
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_transactions_close_time
+  ON transactions(close_time)
+`);
+console.log('✓ idx_transactions_close_time 索引创建成功');
+
 // 创建汇率表
 db.exec(`
   CREATE TABLE IF NOT EXISTS exchange_rates (

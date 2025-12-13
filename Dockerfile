@@ -72,5 +72,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# 启动命令
-CMD ["sh", "-c", "node database/init.js && node server.js"]
+# 启动命令 - 先初始化数据库，再运行迁移（添加索引），最后启动服务
+CMD ["sh", "-c", "node database/init.js && node database/migrate.js && node server.js"]

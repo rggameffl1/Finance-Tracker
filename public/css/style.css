@@ -1441,6 +1441,46 @@ html.theme-clip-animating * {
 }
 
 /* ========================================
+   数据库状态显示
+   ======================================== */
+.database-status {
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-sm);
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.status-label {
+  color: var(--text-secondary);
+}
+
+.status-value {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.status-value.success {
+  color: var(--color-success);
+}
+
+.status-value.warning {
+  color: var(--color-warning);
+}
+
+/* ========================================
    Toast通知
    ======================================== */
 .toast-container {

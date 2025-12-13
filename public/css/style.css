@@ -322,17 +322,20 @@ html.theme-transitioning *::after {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  flex-wrap: nowrap;
 }
 
 .currency-selector {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  height: 36px; /* 与按钮高度一致 */
 }
 
 .currency-selector label {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
+  white-space: nowrap;
 }
 
 .currency-selector select {
@@ -344,10 +347,23 @@ html.theme-transitioning *::after {
   font-size: var(--font-size-sm);
   cursor: pointer;
   transition: var(--transition-fast);
+  height: 36px; /* 与按钮高度一致 */
 }
 
 .currency-selector select:hover {
   border-color: var(--color-primary);
+}
+
+/* 确保自定义下拉框在导航栏中高度一致 */
+.currency-selector .custom-select {
+  min-width: 130px;
+}
+
+.currency-selector .custom-select-trigger {
+  height: 36px;
+  padding: 0 var(--spacing-md);
+  display: flex;
+  align-items: center;
 }
 
 /* ========================================
@@ -1561,7 +1577,39 @@ html.theme-clip-animating * {
   .navbar-actions {
     width: 100%;
     justify-content: space-between;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  
+  /* 移动端导航栏元素高度统一 */
+  .navbar-actions > * {
+    flex-shrink: 0;
+  }
+  
+  .navbar .currency-selector {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .navbar .currency-selector label {
+    display: none; /* 移动端隐藏标签节省空间 */
+  }
+  
+  .navbar .currency-selector .custom-select {
+    width: 100%;
+    min-width: 120px;
+  }
+  
+  /* 确保所有导航栏按钮高度一致 */
+  .navbar .btn,
+  .navbar .btn-icon,
+  .navbar .theme-toggle {
+    height: 36px;
+    min-width: 36px;
+  }
+  
+  .navbar .btn-secondary {
+    padding: 0 var(--spacing-sm);
   }
   
   .main-content {
@@ -1606,9 +1654,7 @@ html.theme-clip-animating * {
 
 @media (max-width: 480px) {
   .currency-selector {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-xs);
+    height: 36px;
   }
   
   .btn span:not(.icon) {

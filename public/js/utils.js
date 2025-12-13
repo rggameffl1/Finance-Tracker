@@ -549,6 +549,38 @@ const CustomSelect = {
   },
   
   /**
+   * 静默设置下拉框值（不触发change事件）
+   * 用于加载设置时更新显示，避免触发保存
+   */
+  setValueSilent(selectId, value) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    // 设置原始select的值
+    select.value = value;
+    
+    const wrapper = select.closest('.custom-select');
+    if (!wrapper) return;
+    
+    // 更新自定义下拉框的显示（不触发change事件）
+    const trigger = wrapper.querySelector('.custom-select-trigger');
+    const selectedText = trigger.querySelector('.selected-text');
+    const options = wrapper.querySelectorAll('.custom-select-option');
+    
+    const option = Array.from(select.options).find(opt => opt.value === value);
+    if (option) {
+      // 更新显示文本
+      selectedText.textContent = option.text;
+      selectedText.classList.toggle('placeholder', !value);
+      
+      // 更新选中状态
+      options.forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.value === value);
+      });
+    }
+  },
+  
+  /**
    * 获取下拉框值
    */
   getValue(selectId) {

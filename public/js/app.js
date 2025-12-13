@@ -271,20 +271,21 @@ const App = {
     try {
       this.state.settings = await API.settings.getAll();
       
-      // 应用设置
+      // 应用设置 - 使用 setValueSilent 避免触发 change 事件导致重复保存
       if (this.state.settings.display_currency) {
         this.state.displayCurrency = this.state.settings.display_currency;
-        document.getElementById('displayCurrency').value = this.state.displayCurrency;
+        CustomSelect.setValueSilent('displayCurrency', this.state.displayCurrency);
       }
       
+      // 汇率更新频率
       if (this.state.settings.exchange_rate_update_interval) {
-        document.getElementById('updateInterval').value = this.state.settings.exchange_rate_update_interval;
+        CustomSelect.setValueSilent('updateInterval', this.state.settings.exchange_rate_update_interval);
       }
       
       // 应用涨跌颜色模式
       const profitColorMode = this.state.settings.profit_color_mode || 'us';
       this.applyProfitColorMode(profitColorMode);
-      document.getElementById('profitColorMode').value = profitColorMode;
+      CustomSelect.setValueSilent('profitColorMode', profitColorMode);
     } catch (error) {
       console.error('加载设置失败:', error);
     }

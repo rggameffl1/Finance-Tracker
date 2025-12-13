@@ -54,9 +54,9 @@ COPY --from=builder /app/node_modules ./node_modules
 # 复制应用代码
 COPY --chown=nodejs:nodejs . .
 
-# 创建数据目录并设置权限
-RUN mkdir -p /app/database && \
-    chown -R nodejs:nodejs /app/database
+# 创建独立的数据目录（与代码目录分离，用于持久化）
+RUN mkdir -p /app/data && \
+    chown -R nodejs:nodejs /app/data
 
 # 切换到非 root 用户
 USER nodejs
@@ -71,6 +71,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # 环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
+# 数据目录环境变量 - 指向独立的数据目录
+ENV DATA_DIR=/app/data
 
 # 启动命令 - 先初始化数据库，再运行迁移（添加索引），最后启动服务
 CMD ["sh", "-c", "node database/init.js && node database/migrate.js && node server.js"]

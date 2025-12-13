@@ -341,16 +341,15 @@ router.get('/database/status', (req, res) => {
       ORDER BY tbl_name, name
     `).all();
     
-    // 获取数据库文件大小
-    const path = require('path');
+    // 获取数据库文件大小（使用 db.dbPath 获取实际路径）
     const fs = require('fs');
-    const dbPath = path.join(__dirname, '../database/finance.db');
     let dbSize = 0;
     try {
-      const stats = fs.statSync(dbPath);
+      const stats = fs.statSync(db.dbPath);
       dbSize = stats.size;
     } catch (e) {
-      // 忽略错误
+      // 忽略错误，可能是文件不存在或权限问题
+      console.warn('获取数据库文件大小失败:', e.message);
     }
     
     res.json({

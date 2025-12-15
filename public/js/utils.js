@@ -182,6 +182,21 @@ const Utils = {
    */
   generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  },
+  
+  /**
+   * 转义HTML特殊字符，防止XSS攻击
+   */
+  escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
   }
 };
 

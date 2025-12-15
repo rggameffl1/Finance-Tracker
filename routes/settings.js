@@ -136,7 +136,7 @@ router.get('/export/all', (req, res) => {
     
     // 使用流式写入，减少内存占用
     res.write('{\n');
-    res.write(`  "version": "1.1",\n`);
+    res.write(`  "version": "1.2",\n`);
     res.write(`  "exportTime": "${new Date().toISOString()}",\n`);
     res.write(`  "data": {\n`);
     
@@ -170,6 +170,32 @@ router.get('/export/all', (req, res) => {
     
     res.write(`],\n`);
     
+    // 导出资金记录（分批处理大数据）
+    const fundRecordCount = db.prepare('SELECT COUNT(*) as count FROM fund_records').get().count;
+    res.write(`    "fundRecords": [`);
+    
+    if (fundRecordCount > 0) {
+      const batchSize = 500;
+      let offset = 0;
+      let isFirst = true;
+      
+      while (offset < fundRecordCount) {
+        const batch = db.prepare('SELECT * FROM fund_records ORDER BY id LIMIT ? OFFSET ?').all(batchSize, offset);
+        
+        batch.forEach((fr, index) => {
+          if (!isFirst || index > 0) {
+            res.write(',');
+          }
+          res.write(JSON.stringify(fr));
+          isFirst = false;
+        });
+        
+        offset += batchSize;
+      }
+    }
+    
+    res.write(`],\n`);
+    
     // 导出设置（不包含汇率数据）
     const settings = db.prepare('SELECT * FROM settings').all();
     res.write(`    "settings": ${JSON.stringify(settings)}\n`);
@@ -184,7 +210,7 @@ router.get('/export/all', (req, res) => {
 });
 
 // 导入数据（分批处理，优化性能，不含汇率）
-// 默认行为：覆盖现有交易记录数据，保留平台配置
+// 默认行为：覆盖现有交易记录和资金记录数据，保留平台配置
 router.post('/import/all', (req, res) => {
   try {
     const { data, options = {} } = req.body;
@@ -193,13 +219,14 @@ router.post('/import/all', (req, res) => {
       return res.status(400).json({ error: '请提供导入数据' });
     }
     
-    const { platforms, transactions, settings } = data;
+    const { platforms, transactions, fundRecords, settings } = data;
     // 默认覆盖模式，除非明确指定保留
     const { keepExisting = false } = options;
     
     const result = {
       platforms: { imported: 0, skipped: 0 },
       transactions: { imported: 0, skipped: 0 },
+      fundRecords: { imported: 0, skipped: 0 },
       settings: { imported: 0, skipped: 0 }
     };
     
@@ -218,16 +245,23 @@ router.post('/import/all', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
+    const insertFundRecordStmt = db.prepare(`
+      INSERT INTO fund_records (
+        platform_id, type, amount, record_time, note
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+    
     const upsertSettingStmt = db.prepare(`
       INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
     `);
     
     // 使用事务确保数据一致性
     const importAll = db.transaction(() => {
-      // 默认覆盖模式：清除现有交易记录数据
+      // 默认覆盖模式：清除现有交易记录和资金记录数据
       // 只有当 keepExisting = true 时才保留现有数据
       if (!keepExisting) {
         db.prepare('DELETE FROM transactions').run();
+        db.prepare('DELETE FROM fund_records').run();
       }
       
       // 导入平台数据（更新初始资金）
@@ -247,13 +281,13 @@ router.post('/import/all', (req, res) => {
         });
       }
       
+      // 预先获取所有有效平台ID（用于交易记录和资金记录验证）
+      const validPlatformIds = new Set(
+        db.prepare('SELECT id FROM platforms').all().map(p => p.id)
+      );
+      
       // 导入交易记录
       if (transactions && Array.isArray(transactions)) {
-        // 预先获取所有有效平台ID
-        const validPlatformIds = new Set(
-          db.prepare('SELECT id FROM platforms').all().map(p => p.id)
-        );
-        
         // 分批处理，每批500条，避免长时间阻塞
         const batchSize = 500;
         for (let i = 0; i < transactions.length; i += batchSize) {
@@ -288,6 +322,36 @@ router.post('/import/all', (req, res) => {
             } catch (e) {
               console.error('导入交易记录失败:', e.message);
               result.transactions.skipped++;
+            }
+          });
+        }
+      }
+      
+      // 导入资金记录
+      if (fundRecords && Array.isArray(fundRecords)) {
+        const batchSize = 500;
+        for (let i = 0; i < fundRecords.length; i += batchSize) {
+          const batch = fundRecords.slice(i, i + batchSize);
+          
+          batch.forEach(fr => {
+            try {
+              // 快速检查平台是否存在
+              if (!validPlatformIds.has(fr.platform_id)) {
+                result.fundRecords.skipped++;
+                return;
+              }
+              
+              insertFundRecordStmt.run(
+                fr.platform_id,
+                fr.type,
+                fr.amount || '0',
+                fr.record_time,
+                fr.note
+              );
+              result.fundRecords.imported++;
+            } catch (e) {
+              console.error('导入资金记录失败:', e.message);
+              result.fundRecords.skipped++;
             }
           });
         }
@@ -331,6 +395,7 @@ router.get('/database/status', (req, res) => {
     // 获取表记录数
     const transactionCount = db.prepare('SELECT COUNT(*) as count FROM transactions').get().count;
     const platformCount = db.prepare('SELECT COUNT(*) as count FROM platforms').get().count;
+    const fundRecordCount = db.prepare('SELECT COUNT(*) as count FROM fund_records').get().count;
     const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
     
     // 获取索引信息
@@ -356,6 +421,7 @@ router.get('/database/status', (req, res) => {
       tables: {
         transactions: transactionCount,
         platforms: platformCount,
+        fundRecords: fundRecordCount,
         settings: settingCount
       },
       indexes: indexes.map(idx => ({

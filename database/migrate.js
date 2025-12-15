@@ -187,6 +187,151 @@ function checkAndRebuildTransactionsTable() {
   }
 }
 
+// 检查表是否存在
+function tableExists(tableName) {
+  const result = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(tableName);
+  return !!result;
+}
+
+// 创建资金记录表（如果不存在）
+function createFundRecordsTableIfNotExists() {
+  try {
+    if (!tableExists('fund_records')) {
+      db.exec(`
+        CREATE TABLE fund_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          platform_id INTEGER NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('存入', '取出')),
+          amount TEXT NOT NULL,
+          record_time TEXT NOT NULL,
+          note TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (platform_id) REFERENCES platforms(id) ON DELETE CASCADE
+        )
+      `);
+      console.log('✓ 创建 fund_records 表成功（仅支持存入/取出类型）');
+      
+      // 创建触发器
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS update_fund_records_timestamp
+        AFTER UPDATE ON fund_records
+        BEGIN
+          UPDATE fund_records SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END
+      `);
+      console.log('✓ 创建 fund_records 更新触发器成功');
+      
+      return true;
+    } else {
+      console.log('- fund_records 表已存在，跳过');
+      return false;
+    }
+  } catch (error) {
+    console.error('✗ 创建 fund_records 表失败:', error.message);
+    return false;
+  }
+}
+
+// 检查并重建 fund_records 表以更新 CHECK 约束（只允许存入和取出）
+function checkAndRebuildFundRecordsTable() {
+  try {
+    if (!tableExists('fund_records')) {
+      return false;
+    }
+    
+    // 检查表的 CHECK 约束是否包含旧类型
+    const sqlResult = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='fund_records'`).get();
+    if (sqlResult && sqlResult.sql) {
+      // 如果包含旧的类型（分红、利息等），需要重建表
+      if (sqlResult.sql.includes("'分红'") ||
+          sqlResult.sql.includes("'利息'") ||
+          sqlResult.sql.includes("'转入'") ||
+          sqlResult.sql.includes("'转出'") ||
+          sqlResult.sql.includes("'其他'")) {
+        console.log('发现 fund_records 表包含旧的类型约束，需要重建表');
+        
+        // 开始事务
+        db.exec('BEGIN TRANSACTION');
+        
+        try {
+          // 1. 创建新表（只允许存入和取出）
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS fund_records_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              platform_id INTEGER NOT NULL,
+              type TEXT NOT NULL CHECK(type IN ('存入', '取出')),
+              amount TEXT NOT NULL,
+              record_time TEXT NOT NULL,
+              note TEXT,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (platform_id) REFERENCES platforms(id) ON DELETE CASCADE
+            )
+          `);
+          
+          // 2. 复制数据（将旧类型映射到新类型）
+          // 分红、利息、转入 -> 存入
+          // 转出 -> 取出
+          // 其他 -> 根据金额正负决定
+          db.exec(`
+            INSERT INTO fund_records_new (id, platform_id, type, amount, record_time, note, created_at, updated_at)
+            SELECT
+              id,
+              platform_id,
+              CASE
+                WHEN type IN ('存入', '分红', '利息', '转入') THEN '存入'
+                WHEN type IN ('取出', '转出') THEN '取出'
+                WHEN type = '其他' AND CAST(amount AS REAL) >= 0 THEN '存入'
+                ELSE '取出'
+              END as type,
+              CASE
+                WHEN type = '其他' THEN CAST(ABS(CAST(amount AS REAL)) AS TEXT)
+                ELSE amount
+              END as amount,
+              record_time,
+              note,
+              created_at,
+              updated_at
+            FROM fund_records
+          `);
+          
+          // 3. 删除旧表
+          db.exec('DROP TABLE fund_records');
+          
+          // 4. 重命名新表
+          db.exec('ALTER TABLE fund_records_new RENAME TO fund_records');
+          
+          // 5. 重建触发器
+          db.exec(`
+            CREATE TRIGGER IF NOT EXISTS update_fund_records_timestamp
+            AFTER UPDATE ON fund_records
+            BEGIN
+              UPDATE fund_records SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END
+          `);
+          
+          db.exec('COMMIT');
+          console.log('✓ fund_records 表重建成功（仅支持存入/取出类型）');
+          return true;
+        } catch (error) {
+          db.exec('ROLLBACK');
+          throw error;
+        }
+      }
+    }
+    
+    console.log('- fund_records 表结构正常，无需重建');
+    return false;
+  } catch (error) {
+    console.error('检查/重建 fund_records 表失败:', error.message);
+    return false;
+  }
+}
+
 // 迁移：添加 quantity, open_price, close_price, investment 列到 transactions 表
 console.log('\n--- 迁移 transactions 表 ---');
 addColumnIfNotExists('transactions', 'quantity', 'TEXT');  // 使用TEXT存储高精度小数
@@ -224,6 +369,32 @@ if (createIndexIfNotExists('idx_transactions_asset_code', 'transactions', 'asset
 
 // 5. 平仓时间索引 - 优化按平仓时间查询（用于归档等场景）
 if (createIndexIfNotExists('idx_transactions_close_time', 'transactions', 'close_time')) {
+  indexCount++;
+}
+
+// 创建资金记录表
+console.log('\n--- 迁移 fund_records 表 ---');
+createFundRecordsTableIfNotExists();
+
+// 检查并重建 fund_records 表（更新类型约束）
+console.log('\n--- 检查 fund_records 表结构 ---');
+checkAndRebuildFundRecordsTable();
+
+// 资金记录表索引
+console.log('\n--- 创建资金记录表索引 ---');
+
+// 6. 资金记录平台ID索引
+if (createIndexIfNotExists('idx_fund_records_platform_id', 'fund_records', 'platform_id')) {
+  indexCount++;
+}
+
+// 7. 资金记录时间索引
+if (createIndexIfNotExists('idx_fund_records_record_time', 'fund_records', 'record_time', true)) {
+  indexCount++;
+}
+
+// 8. 资金记录复合索引
+if (createIndexIfNotExists('idx_fund_records_platform_time', 'fund_records', 'platform_id, record_time DESC')) {
   indexCount++;
 }
 

@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "init-db": "node database/init.js",
+    "migrate": "node database/migrate.js",
     "fetch-rates": "node scripts/fetchExchangeRate.js",
     "fetch-rates:cron": "node scripts/fetchExchangeRate.js --cron"
   },

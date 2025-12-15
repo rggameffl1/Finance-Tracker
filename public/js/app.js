@@ -1,8 +1,8 @@
 // {{CODE-Cycle-Integration:
-//   Task_ID: #T008-T023
-//   Timestamp: 2025-12-11T04:51:00Z
+//   Task_ID: #T041-T045
+//   Timestamp: 2025-12-15T04:35:00Z
 //   Phase: D-Develop
-//   Context-Analysis: "主应用逻辑 - 整合所有前端功能，包含数据导入导出"
+//   Context-Analysis: "主应用逻辑 - 重构资金记录逻辑，简化为存入/取出"
 //   Principle_Applied: "SOLID, Event-Driven, State Management"
 // }}
 // {{START_MODIFICATIONS}}
@@ -16,6 +16,7 @@ const App = {
     displayCurrency: 'CNY',
     platforms: [],
     transactions: [],
+    fundRecords: [],
     exchangeRates: {},
     settings: {},
     pagination: {
@@ -24,7 +25,16 @@ const App = {
       total: 0,
       totalPages: 0
     },
-    currentPlatformFilter: ''
+    fundRecordsPagination: {
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 0
+    },
+    currentPlatformFilter: '',
+    currentFundRecordPlatformFilter: '',
+    // 当前资金记录模态框的平台资金状态
+    currentFundRecordPlatformStatus: null
   },
   
   /**
@@ -82,6 +92,47 @@ const App = {
       this.state.currentPlatformFilter = e.target.value;
       this.state.pagination.page = 1;
       this.loadTransactions();
+    });
+    
+    // 新增资金记录按钮
+    document.getElementById('addFundRecordBtn').addEventListener('click', () => {
+      this.openFundRecordModal();
+    });
+    
+    // 资金记录平台筛选
+    document.getElementById('fundRecordPlatformFilter').addEventListener('change', (e) => {
+      this.state.currentFundRecordPlatformFilter = e.target.value;
+      this.state.fundRecordsPagination.page = 1;
+      this.loadFundRecords();
+    });
+    
+    // 资金记录表单提交
+    document.getElementById('fundRecordForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveFundRecord();
+    });
+    
+    // 资金记录平台选择变化时，加载平台资金状态
+    document.getElementById('fundRecordPlatformId').addEventListener('change', (e) => {
+      this.onFundRecordPlatformChange(e.target.value);
+    });
+    
+    // 资金记录类型变化时，更新提示
+    document.getElementById('fundRecordType').addEventListener('change', () => {
+      this.updateFundRecordAmountHint();
+    });
+    
+    // 资金记录金额变化时，实时校验
+    document.getElementById('fundRecordAmount').addEventListener('input', () => {
+      this.validateFundRecordAmount();
+    });
+    
+    // 资金记录模态框关闭按钮
+    document.getElementById('closeFundRecordModal').addEventListener('click', () => {
+      Modal.close('fundRecordModal');
+    });
+    document.getElementById('cancelFundRecordBtn').addEventListener('click', () => {
+      Modal.close('fundRecordModal');
     });
     
     // 交易记录表单提交
@@ -261,7 +312,8 @@ const App = {
         this.loadExchangeRates(),
         this.loadPlatforms(),
         this.loadOverview(),
-        this.loadTransactions()
+        this.loadTransactions(),
+        this.loadFundRecords()
       ]);
     } catch (error) {
       console.error('加载初始数据失败:', error);
@@ -318,6 +370,8 @@ const App = {
       this.renderPlatforms();
       this.updatePlatformFilter();
       this.updatePlatformSelect();
+      this.updateFundRecordPlatformFilter();
+      this.updateFundRecordPlatformSelect();
     } catch (error) {
       console.error('加载平台数据失败:', error);
     }
@@ -361,6 +415,93 @@ const App = {
   },
   
   /**
+   * 加载资金记录
+   */
+  async loadFundRecords() {
+    try {
+      const params = {
+        page: this.state.fundRecordsPagination.page,
+        limit: this.state.fundRecordsPagination.limit
+      };
+      
+      if (this.state.currentFundRecordPlatformFilter) {
+        params.platform_id = this.state.currentFundRecordPlatformFilter;
+      }
+      
+      const data = await API.fundRecords.getAll(params);
+      this.state.fundRecords = data.data || [];
+      this.state.fundRecordsPagination = data.pagination || this.state.fundRecordsPagination;
+      
+      this.renderFundRecords();
+      this.renderFundRecordsPagination();
+      
+      // 加载资金汇总
+      await this.loadFundSummary();
+    } catch (error) {
+      console.error('加载资金记录失败:', error);
+    }
+  },
+  
+  /**
+   * 加载资金汇总
+   */
+  async loadFundSummary() {
+    try {
+      const data = await API.fundRecords.getSummaryByPlatform();
+      this.renderFundSummary(data);
+    } catch (error) {
+      console.error('加载资金汇总失败:', error);
+    }
+  },
+  
+  /**
+   * 渲染资金汇总卡片
+   */
+  renderFundSummary(data) {
+    const currency = this.state.displayCurrency;
+    
+    // 计算总流入、总流出（转换为显示币种）
+    // 后端返回的 total_inflow 和 total_outflow 都是正数（使用 ABS）
+    let totalInflow = 0;
+    let totalOutflow = 0;
+    
+    const summaryList = data.summary || data || [];
+    const items = Array.isArray(summaryList) ? summaryList : [];
+    
+    items.forEach(item => {
+      const rate = this.getExchangeRate(item.currency, currency);
+      totalInflow += Math.abs(parseFloat(item.total_inflow || 0)) * rate;
+      totalOutflow += Math.abs(parseFloat(item.total_outflow || 0)) * rate;
+    });
+    
+    // 净流入 = 流入 - 流出
+    const netFlow = totalInflow - totalOutflow;
+    
+    // 更新显示
+    // 总流入显示为正数
+    const inflowEl = document.getElementById('totalInflow');
+    if (inflowEl) {
+      inflowEl.textContent = Utils.formatCurrency(totalInflow, currency, true);
+      inflowEl.className = 'card-value profit-positive';
+    }
+    
+    // 总流出显示为负数（更直观）
+    const outflowEl = document.getElementById('totalOutflow');
+    if (outflowEl) {
+      // 使用负数显示流出，让用户更直观地看到资金流出
+      outflowEl.textContent = Utils.formatCurrency(-totalOutflow, currency, true);
+      outflowEl.className = 'card-value profit-negative';
+    }
+    
+    // 净流入根据正负显示颜色
+    const netFlowEl = document.getElementById('netFlow');
+    if (netFlowEl) {
+      netFlowEl.textContent = Utils.formatCurrency(netFlow, currency, true);
+      netFlowEl.className = `card-value ${Utils.getProfitClass(netFlow)}`;
+    }
+  },
+  
+  /**
    * 渲染资金总览
    */
   renderOverview(data) {
@@ -380,11 +521,20 @@ const App = {
     profitEl.textContent = Utils.formatCurrency(summary.total_realized_profit, currency, true);
     profitEl.className = `card-value ${Utils.getProfitClass(summary.total_realized_profit)}`;
     
-    // 涨跌幅
+    // 涨跌幅 - 当初始资金为0时显示特殊标记
     const changeEl = document.getElementById('totalChangePercent');
     const changePercent = parseFloat(summary.total_change_percent);
-    changeEl.textContent = Utils.formatPercent(changePercent);
-    changeEl.className = `card-value ${Utils.getProfitClass(changePercent)}`;
+    const totalInitialCapital = parseFloat(summary.total_initial_capital) || 0;
+    
+    if (totalInitialCapital === 0) {
+      changeEl.textContent = '——';
+      changeEl.className = 'card-value';
+      changeEl.title = '初始资金为0，无法计算涨跌幅';
+    } else {
+      changeEl.textContent = Utils.formatPercent(changePercent);
+      changeEl.className = `card-value ${Utils.getProfitClass(changePercent)}`;
+      changeEl.title = '';
+    }
   },
   
   /**
@@ -412,6 +562,19 @@ const App = {
       const totalProfit = platform.total_realized_profit * rate;
       const totalCapital = platform.total_capital * rate;
       const changePercent = parseFloat(platform.change_percent);
+      const rawInitialCapital = parseFloat(platform.initial_capital) || 0;
+      
+      // 涨跌幅显示 - 当初始资金为0时显示特殊标记
+      let changePercentDisplay, changePercentClass, changePercentTitle;
+      if (rawInitialCapital === 0) {
+        changePercentDisplay = '——';
+        changePercentClass = '';
+        changePercentTitle = '初始资金为0，无法计算涨跌幅';
+      } else {
+        changePercentDisplay = Utils.formatPercent(changePercent);
+        changePercentClass = Utils.getProfitClass(changePercent);
+        changePercentTitle = '';
+      }
       
       return `
         <div class="platform-card" data-id="${platform.id}">
@@ -437,7 +600,7 @@ const App = {
             </div>
             <div class="platform-stat">
               <span class="platform-stat-label">涨跌幅</span>
-              <span class="platform-stat-value ${Utils.getProfitClass(changePercent)}">${Utils.formatPercent(changePercent)}</span>
+              <span class="platform-stat-value ${changePercentClass}" title="${changePercentTitle}">${changePercentDisplay}</span>
             </div>
           </div>
           <div class="platform-card-footer" style="margin-top: 16px; text-align: right;">
@@ -601,6 +764,374 @@ const App = {
       ...this.state.platforms.map(p => ({ value: String(p.id), text: `${p.name} (${p.currency})` }))
     ];
     CustomSelect.updateOptions('platformId', options);
+  },
+  
+  /**
+   * 更新资金记录平台筛选下拉框
+   */
+  updateFundRecordPlatformFilter() {
+    const options = [
+      { value: '', text: '全部平台' },
+      ...this.state.platforms.map(p => ({ value: String(p.id), text: p.name }))
+    ];
+    CustomSelect.updateOptions('fundRecordPlatformFilter', options);
+  },
+  
+  /**
+   * 更新资金记录平台选择下拉框（表单中）
+   */
+  updateFundRecordPlatformSelect() {
+    const options = [
+      { value: '', text: '请选择平台' },
+      ...this.state.platforms.map(p => ({ value: String(p.id), text: `${p.name} (${p.currency})` }))
+    ];
+    CustomSelect.updateOptions('fundRecordPlatformId', options);
+  },
+  
+  /**
+   * 渲染资金记录表格
+   */
+  renderFundRecords() {
+    const tbody = document.getElementById('fundRecordsBody');
+    
+    if (this.state.fundRecords.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="empty-state">
+            <div class="empty-state-icon">💸</div>
+            <div class="empty-state-text">暂无资金记录</div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    
+    tbody.innerHTML = this.state.fundRecords.map(r => {
+      // 简化为只有存入和取出两种类型
+      const isInflow = r.type === '存入';
+      const isOutflow = r.type === '取出';
+      const amountClass = isInflow ? 'profit' : (isOutflow ? 'loss' : '');
+      const amountPrefix = isInflow ? '+' : (isOutflow ? '-' : '');
+      const displayAmount = Math.abs(r.amount);
+      
+      // 类型徽章样式
+      const typeClass = isInflow ? 'badge-inflow' : 'badge-outflow';
+      
+      // 备注处理 - 添加 title 属性用于 tooltip
+      const noteDisplay = r.note || '--';
+      const noteTitle = r.note ? `title="${Utils.escapeHtml(r.note)}"` : '';
+      
+      return `
+        <tr data-id="${r.id}">
+          <td>${r.platform_name}</td>
+          <td><span class="badge ${typeClass}">${r.type}</span></td>
+          <td class="${amountClass}">${amountPrefix}${Utils.formatCurrency(displayAmount, r.platform_currency)}</td>
+          <td>${Utils.formatDateTimeHTML(r.record_time)}</td>
+          <td class="note-cell" ${noteTitle}>${Utils.escapeHtml(noteDisplay)}</td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-icon" onclick="App.openFundRecordModal(${r.id})" title="编辑">✏️</button>
+              <button class="btn btn-icon" onclick="App.deleteFundRecord(${r.id})" title="删除">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+  
+  /**
+   * 渲染资金记录分页
+   */
+  renderFundRecordsPagination() {
+    const container = document.getElementById('fundRecordsPagination');
+    const { page, totalPages, total } = this.state.fundRecordsPagination;
+    
+    if (totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+    
+    let html = `
+      <button class="pagination-btn" onclick="App.goToFundRecordPage(1)" ${page === 1 ? 'disabled' : ''}>首页</button>
+      <button class="pagination-btn" onclick="App.goToFundRecordPage(${page - 1})" ${page === 1 ? 'disabled' : ''}>上一页</button>
+    `;
+    
+    // 页码按钮
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(totalPages, page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+      html += `
+        <button class="pagination-btn ${i === page ? 'active' : ''}" onclick="App.goToFundRecordPage(${i})">${i}</button>
+      `;
+    }
+    
+    html += `
+      <button class="pagination-btn" onclick="App.goToFundRecordPage(${page + 1})" ${page === totalPages ? 'disabled' : ''}>下一页</button>
+      <button class="pagination-btn" onclick="App.goToFundRecordPage(${totalPages})" ${page === totalPages ? 'disabled' : ''}>末页</button>
+      <span class="pagination-info">共 ${total} 条记录</span>
+    `;
+    
+    container.innerHTML = html;
+  },
+  
+  /**
+   * 跳转到资金记录指定页
+   */
+  goToFundRecordPage(page) {
+    if (page < 1 || page > this.state.fundRecordsPagination.totalPages) return;
+    this.state.fundRecordsPagination.page = page;
+    this.loadFundRecords();
+  },
+  
+  /**
+   * 打开资金记录模态框
+   */
+  async openFundRecordModal(id = null) {
+    const form = document.getElementById('fundRecordForm');
+    const title = document.getElementById('fundRecordModalTitle');
+    
+    form.reset();
+    document.getElementById('fundRecordId').value = '';
+    this.state.currentFundRecordPlatformStatus = null;
+    this.hideAmountHint();
+    
+    // 重置自定义下拉框
+    CustomSelect.setValue('fundRecordPlatformId', '');
+    CustomSelect.setValue('fundRecordType', '存入');
+    
+    if (id) {
+      // 编辑模式
+      title.textContent = '编辑资金记录';
+      try {
+        const record = await API.fundRecords.getById(id);
+        document.getElementById('fundRecordId').value = record.id;
+        CustomSelect.setValue('fundRecordPlatformId', String(record.platform_id));
+        CustomSelect.setValue('fundRecordType', record.type);
+        document.getElementById('fundRecordAmount').value = record.amount;
+        document.getElementById('fundRecordTime').value = this.formatTimeWithSeconds(record.record_time);
+        document.getElementById('fundRecordNote').value = record.note || '';
+        
+        // 加载平台资金状态
+        await this.onFundRecordPlatformChange(String(record.platform_id));
+      } catch (error) {
+        Toast.error('加载资金记录失败');
+        return;
+      }
+    } else {
+      // 新增模式
+      title.textContent = '新增资金记录';
+      // 设置默认记录时间为当前时间
+      document.getElementById('fundRecordTime').value = this.formatTimeWithSeconds(new Date());
+    }
+    
+    Modal.open('fundRecordModal');
+  },
+  
+  /**
+   * 当资金记录平台选择变化时
+   */
+  async onFundRecordPlatformChange(platformId) {
+    if (!platformId) {
+      this.state.currentFundRecordPlatformStatus = null;
+      this.hideAmountHint();
+      return;
+    }
+    
+    try {
+      const status = await API.fundRecords.getPlatformStatus(platformId);
+      this.state.currentFundRecordPlatformStatus = status;
+      this.updateFundRecordAmountHint();
+    } catch (error) {
+      console.error('获取平台资金状态失败:', error);
+      this.state.currentFundRecordPlatformStatus = null;
+      this.hideAmountHint();
+    }
+  },
+  
+  /**
+   * 更新资金记录金额提示
+   */
+  updateFundRecordAmountHint() {
+    const type = document.getElementById('fundRecordType').value;
+    const status = this.state.currentFundRecordPlatformStatus;
+    const hintEl = document.getElementById('fundRecordAmountHint');
+    
+    if (!status || !hintEl) {
+      this.hideAmountHint();
+      return;
+    }
+    
+    const platform = this.state.platforms.find(p => p.id === parseInt(document.getElementById('fundRecordPlatformId').value));
+    const currency = platform ? platform.currency : 'CNY';
+    
+    if (type === '取出') {
+      const maxWithdraw = status.total_capital;
+      hintEl.innerHTML = `
+        <span class="hint-info">
+          可取出金额: <strong>${Utils.formatCurrency(maxWithdraw, currency)}</strong>
+          (初始资金: ${Utils.formatCurrency(status.initial_capital, currency)},
+          盈亏: ${Utils.formatCurrency(status.total_profit, currency, true)})
+        </span>
+      `;
+      hintEl.style.display = 'block';
+    } else if (type === '存入') {
+      hintEl.innerHTML = `
+        <span class="hint-info">
+          当前初始资金: <strong>${Utils.formatCurrency(status.initial_capital, currency)}</strong>
+          (存入后将增加初始资金)
+        </span>
+      `;
+      hintEl.style.display = 'block';
+    } else {
+      this.hideAmountHint();
+    }
+    
+    // 同时验证当前金额
+    this.validateFundRecordAmount();
+  },
+  
+  /**
+   * 隐藏金额提示
+   */
+  hideAmountHint() {
+    const hintEl = document.getElementById('fundRecordAmountHint');
+    if (hintEl) {
+      hintEl.style.display = 'none';
+      hintEl.innerHTML = '';
+    }
+  },
+  
+  /**
+   * 验证资金记录金额
+   */
+  validateFundRecordAmount() {
+    const type = document.getElementById('fundRecordType').value;
+    const amountStr = document.getElementById('fundRecordAmount').value;
+    const status = this.state.currentFundRecordPlatformStatus;
+    const amountInput = document.getElementById('fundRecordAmount');
+    
+    // 清除之前的错误样式
+    amountInput.classList.remove('input-error');
+    
+    if (!amountStr || !status) return true;
+    
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount)) return true;
+    
+    if (amount <= 0) {
+      amountInput.classList.add('input-error');
+      return false;
+    }
+    
+    if (type === '取出') {
+      if (amount > status.total_capital) {
+        amountInput.classList.add('input-error');
+        return false;
+      }
+    }
+    
+    return true;
+  },
+  
+  /**
+   * 保存资金记录
+   */
+  async saveFundRecord() {
+    const id = document.getElementById('fundRecordId').value;
+    
+    // 获取并验证平台ID
+    const platformIdStr = document.getElementById('fundRecordPlatformId').value;
+    if (!platformIdStr) {
+      Toast.error('请选择平台');
+      return;
+    }
+    const platformId = parseInt(platformIdStr);
+    if (isNaN(platformId)) {
+      Toast.error('平台选择无效');
+      return;
+    }
+    
+    // 获取并验证类型（只允许存入和取出）
+    const type = document.getElementById('fundRecordType').value;
+    if (!type || !['存入', '取出'].includes(type)) {
+      Toast.error('请选择有效的类型（存入或取出）');
+      return;
+    }
+    
+    // 获取并验证金额（必须为正数）
+    const amountStr = document.getElementById('fundRecordAmount').value;
+    if (!amountStr) {
+      Toast.error('请输入金额');
+      return;
+    }
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) {
+      Toast.error('金额必须是大于0的有效数字');
+      return;
+    }
+    
+    // 取出时校验金额
+    if (type === '取出') {
+      const status = this.state.currentFundRecordPlatformStatus;
+      if (status && amount > status.total_capital) {
+        const platform = this.state.platforms.find(p => p.id === platformId);
+        const currency = platform ? platform.currency : 'CNY';
+        Toast.error(`取出金额 ${Utils.formatCurrency(amount, currency)} 超过可用资金 ${Utils.formatCurrency(status.total_capital, currency)}`);
+        return;
+      }
+    }
+    
+    // 解析时间
+    const recordTimeStr = document.getElementById('fundRecordTime').value;
+    const recordTime = this.parseTimeString(recordTimeStr);
+    
+    if (!recordTime) {
+      Toast.error('记录时间格式不正确，请使用 YYYY-MM-DD HH:mm:ss 格式');
+      return;
+    }
+    
+    const data = {
+      platform_id: platformId,
+      type: type,
+      amount: String(amount), // 确保是正数字符串
+      record_time: recordTime,
+      note: document.getElementById('fundRecordNote').value.trim() || null
+    };
+    
+    try {
+      if (id) {
+        await API.fundRecords.update(id, data);
+        Toast.success('资金记录更新成功');
+      } else {
+        await API.fundRecords.create(data);
+        Toast.success('资金记录创建成功');
+      }
+      
+      Modal.close('fundRecordModal');
+      await this.loadFundRecords();
+      await this.loadPlatforms();
+      await this.loadOverview();
+    } catch (error) {
+      Toast.error('保存失败: ' + error.message);
+    }
+  },
+  
+  /**
+   * 删除资金记录
+   */
+  async deleteFundRecord(id) {
+    if (!confirm('确定要删除这条资金记录吗？')) return;
+    
+    try {
+      await API.fundRecords.delete(id);
+      Toast.success('资金记录删除成功');
+      await this.loadFundRecords();
+      await this.loadPlatforms();
+      await this.loadOverview();
+    } catch (error) {
+      Toast.error('删除失败: ' + error.message);
+    }
   },
   
   /**

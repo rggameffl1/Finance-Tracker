@@ -70,6 +70,22 @@ db.exec(`
 `);
 console.log('✓ transactions 表创建成功');
 
+// 创建资金记录表（用于记录存入、取出等资金流动）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fund_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform_id INTEGER NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('存入', '取出', '分红', '利息', '转入', '转出', '其他')),
+    amount TEXT NOT NULL,
+    record_time TEXT NOT NULL,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (platform_id) REFERENCES platforms(id) ON DELETE CASCADE
+  )
+`);
+console.log('✓ fund_records 表创建成功');
+
 // 创建索引以优化查询性能
 console.log('正在创建索引...');
 
@@ -107,6 +123,27 @@ db.exec(`
   ON transactions(close_time)
 `);
 console.log('✓ idx_transactions_close_time 索引创建成功');
+
+// 6. 资金记录平台ID索引
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_fund_records_platform_id
+  ON fund_records(platform_id)
+`);
+console.log('✓ idx_fund_records_platform_id 索引创建成功');
+
+// 7. 资金记录时间索引
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_fund_records_record_time
+  ON fund_records(record_time DESC)
+`);
+console.log('✓ idx_fund_records_record_time 索引创建成功');
+
+// 8. 资金记录复合索引
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_fund_records_platform_time
+  ON fund_records(platform_id, record_time DESC)
+`);
+console.log('✓ idx_fund_records_platform_time 复合索引创建成功');
 
 // 创建汇率表
 db.exec(`
@@ -207,10 +244,18 @@ db.exec(`
 `);
 
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp 
+  CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
   AFTER UPDATE ON transactions
   BEGIN
     UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  END
+`);
+
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS update_fund_records_timestamp
+  AFTER UPDATE ON fund_records
+  BEGIN
+    UPDATE fund_records SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
   END
 `);
 console.log('✓ 更新时间触发器创建成功');

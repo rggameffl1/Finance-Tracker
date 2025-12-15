@@ -998,6 +998,181 @@ html.theme-clip-animating * {
   color: #8b5cf6;
 }
 
+/* 资金记录类型徽章 */
+.badge-inflow {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.badge-outflow {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.badge-other {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+/* 资金流入流出颜色 */
+.profit {
+  color: var(--color-success) !important;
+}
+
+.loss {
+  color: var(--color-danger) !important;
+}
+
+/* 红涨绿跌模式下的资金流入流出颜色 */
+[data-profit-color="cn"] .profit {
+  color: var(--color-danger) !important;
+}
+
+[data-profit-color="cn"] .loss {
+  color: var(--color-success) !important;
+}
+
+[data-profit-color="cn"] .badge-inflow {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+[data-profit-color="cn"] .badge-outflow {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+/* 资金记录表格列宽 */
+#fundRecordsTable th:nth-child(1),
+#fundRecordsTable td:nth-child(1) { /* 平台 */
+  width: 100px;
+}
+
+#fundRecordsTable th:nth-child(2),
+#fundRecordsTable td:nth-child(2) { /* 类型 */
+  width: 80px;
+}
+
+#fundRecordsTable th:nth-child(3),
+#fundRecordsTable td:nth-child(3) { /* 金额 */
+  width: 120px;
+}
+
+#fundRecordsTable th:nth-child(4),
+#fundRecordsTable td:nth-child(4) { /* 记录时间 */
+  width: 120px;
+}
+
+#fundRecordsTable th:nth-child(5),
+#fundRecordsTable td:nth-child(5) { /* 备注 */
+  width: 200px;
+  max-width: 250px;
+}
+
+#fundRecordsTable th:nth-child(6),
+#fundRecordsTable td:nth-child(6) { /* 操作 */
+  width: 80px;
+}
+
+/* 资金记录表格不需要那么宽 */
+#fundRecordsTable {
+  min-width: 700px;
+}
+
+/* 备注单元格样式 - 文本截断和 tooltip */
+.note-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  position: relative;
+}
+
+.note-cell[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 1000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  max-width: 350px;
+  white-space: normal;
+  word-wrap: break-word;
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* 资金汇总卡片 */
+.fund-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.fund-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: var(--transition-normal);
+}
+
+.fund-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.fund-summary-card .card-icon {
+  font-size: 28px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+}
+
+.fund-summary-card .card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.fund-summary-card .card-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.fund-summary-card .card-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fund-summary-card.inflow .card-icon {
+  background: var(--color-success-light);
+}
+
+.fund-summary-card.outflow .card-icon {
+  background: var(--color-danger-light);
+}
+
+.fund-summary-card.net .card-icon {
+  background: var(--color-primary-light);
+}
+
 /* ========================================
    分页
    ======================================== */
@@ -1166,6 +1341,37 @@ html.theme-clip-animating * {
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--border-color);
+}
+
+/* 表单提示信息 */
+.form-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  line-height: 1.5;
+}
+
+.form-hint .hint-info {
+  display: block;
+}
+
+.form-hint .hint-info strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* 输入框错误状态 */
+.input-error {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 3px var(--color-danger-light) !important;
+}
+
+.input-error:focus {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 3px var(--color-danger-light) !important;
 }
 
 .form-control {

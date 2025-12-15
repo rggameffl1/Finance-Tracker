@@ -228,6 +228,61 @@ const API = {
   },
   
   // ========================================
+  // 资金记录相关 API
+  // ========================================
+  
+  fundRecords: {
+    /**
+     * 获取资金记录列表
+     */
+    getAll(params = {}) {
+      return API.get('/fund-records', params);
+    },
+    
+    /**
+     * 获取单个资金记录
+     */
+    getById(id) {
+      return API.get(`/fund-records/${id}`);
+    },
+    
+    /**
+     * 创建资金记录
+     */
+    create(data) {
+      return API.post('/fund-records', data);
+    },
+    
+    /**
+     * 更新资金记录
+     */
+    update(id, data) {
+      return API.put(`/fund-records/${id}`, data);
+    },
+    
+    /**
+     * 删除资金记录
+     */
+    delete(id) {
+      return API.delete(`/fund-records/${id}`);
+    },
+    
+    /**
+     * 获取平台资金流动汇总
+     */
+    getSummaryByPlatform() {
+      return API.get('/fund-records/summary/by-platform');
+    },
+    
+    /**
+     * 获取平台资金状态（用于校验取出金额）
+     */
+    getPlatformStatus(platformId) {
+      return API.get(`/fund-records/platform-status/${platformId}`);
+    }
+  },
+  
+  // ========================================
   // 设置相关 API
   // ========================================
   

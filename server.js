@@ -25,12 +25,14 @@ const transactionsRouter = require('./routes/transactions');
 const exchangeRatesRouter = require('./routes/exchangeRates');
 const overviewRouter = require('./routes/overview');
 const settingsRouter = require('./routes/settings');
+const fundRecordsRouter = require('./routes/fundRecords');
 
 app.use('/api/platforms', platformsRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/exchange-rates', exchangeRatesRouter);
 app.use('/api/overview', overviewRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/fund-records', fundRecordsRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

@@ -36,7 +36,7 @@ router.get('/', (req, res) => {
     
     // 获取所有平台及其交易汇总
     const platforms = db.prepare(`
-      SELECT 
+      SELECT
         p.*,
         COALESCE(SUM(t.total_profit - t.total_fee), 0) as total_realized_profit,
         COUNT(t.id) as transaction_count
@@ -45,6 +45,28 @@ router.get('/', (req, res) => {
       GROUP BY p.id
       ORDER BY p.id
     `).all();
+    
+    // 获取各平台的资金流动汇总
+    const fundFlows = db.prepare(`
+      SELECT
+        platform_id,
+        COALESCE(SUM(CASE WHEN type IN ('存入', '分红', '利息', '转入') THEN CAST(amount AS REAL) ELSE 0 END), 0) as total_in,
+        COALESCE(SUM(CASE WHEN type IN ('取出', '转出') THEN CAST(amount AS REAL) ELSE 0 END), 0) as total_out,
+        COALESCE(SUM(CASE WHEN type = '其他' THEN CAST(amount AS REAL) ELSE 0 END), 0) as total_other
+      FROM fund_records
+      GROUP BY platform_id
+    `).all();
+    
+    // 创建资金流动映射
+    const fundFlowMap = {};
+    fundFlows.forEach(f => {
+      fundFlowMap[f.platform_id] = {
+        total_in: f.total_in,
+        total_out: f.total_out,
+        total_other: f.total_other,
+        net_flow: f.total_in - f.total_out + f.total_other
+      };
+    });
     
     // 获取所有汇率
     const rates = db.prepare('SELECT * FROM exchange_rates').all();
@@ -59,16 +81,30 @@ router.get('/', (req, res) => {
     let totalRealizedProfit = 0;
     let totalCapital = 0;
     
+    // 计算总资金流动
+    let totalFundIn = 0;
+    let totalFundOut = 0;
+    
     const platformDetails = platforms.map(p => {
       const rate = rateMap[p.currency]?.[targetCurrency] || 1;
       
+      // 获取该平台的资金流动
+      const fundFlow = fundFlowMap[p.id] || { total_in: 0, total_out: 0, total_other: 0, net_flow: 0 };
+      
       const initialCapitalConverted = p.initial_capital * rate;
       const realizedProfitConverted = p.total_realized_profit * rate;
-      const totalCapitalConverted = initialCapitalConverted + realizedProfitConverted;
+      const fundNetFlowConverted = fundFlow.net_flow * rate;
+      
+      // 总资金 = 初始资金 + 交易盈亏 + 资金净流入（存入-取出）
+      // 注意：取出的钱不应该减少"总资金"显示，因为那是你已经赚到的钱
+      // 但为了准确反映账户当前状态，我们需要考虑资金流动
+      const totalCapitalConverted = initialCapitalConverted + realizedProfitConverted + fundNetFlowConverted;
       
       totalInitialCapital += initialCapitalConverted;
       totalRealizedProfit += realizedProfitConverted;
       totalCapital += totalCapitalConverted;
+      totalFundIn += fundFlow.total_in * rate;
+      totalFundOut += fundFlow.total_out * rate;
       
       return {
         id: p.id,
@@ -84,11 +120,17 @@ router.get('/', (req, res) => {
           original: p.total_realized_profit,
           converted: realizedProfitConverted
         },
+        fund_flow: {
+          total_in: fundFlow.total_in,
+          total_out: fundFlow.total_out,
+          net_flow: fundFlow.net_flow,
+          converted_net_flow: fundNetFlowConverted
+        },
         total_capital: {
-          original: p.initial_capital + p.total_realized_profit,
+          original: p.initial_capital + p.total_realized_profit + fundFlow.net_flow,
           converted: totalCapitalConverted
         },
-        change_percent: p.initial_capital > 0 
+        change_percent: p.initial_capital > 0
           ? ((p.total_realized_profit / p.initial_capital) * 100).toFixed(2)
           : '0.00',
         transaction_count: p.transaction_count
@@ -105,6 +147,9 @@ router.get('/', (req, res) => {
       summary: {
         total_initial_capital: totalInitialCapital,
         total_realized_profit: totalRealizedProfit,
+        total_fund_in: totalFundIn,
+        total_fund_out: totalFundOut,
+        total_fund_net_flow: totalFundIn - totalFundOut,
         total_capital: totalCapital,
         total_change_percent: totalChangePercent,
         platform_count: platforms.length,

@@ -163,6 +163,27 @@ const API = {
      */
     batchDelete(ids) {
       return API.post('/transactions/batch-delete', { ids });
+    },
+    
+    /**
+     * 获取总统计数据
+     */
+    getStats(params = {}) {
+      return API.get('/transactions/stats', params);
+    },
+    
+    /**
+     * 获取交易对列表
+     */
+    getAssetCodes(params = {}) {
+      return API.get('/transactions/asset-codes', params);
+    },
+    
+    /**
+     * 获取单个交易对统计
+     */
+    getAssetStats(assetCode, params = {}) {
+      return API.get(`/transactions/asset-stats/${encodeURIComponent(assetCode)}`, params);
     }
   },
   
@@ -279,6 +300,47 @@ const API = {
      */
     getPlatformStatus(platformId) {
       return API.get(`/fund-records/platform-status/${platformId}`);
+    }
+  },
+  
+  // ========================================
+  // 图表相关 API
+  // ========================================
+  
+  charts: {
+    /**
+     * 获取资产分布数据（饼图）
+     */
+    getAssetDistribution(currency = 'CNY') {
+      return API.get('/charts/asset-distribution', { currency });
+    },
+    
+    /**
+     * 获取月度收益数据（柱状图）
+     */
+    getMonthlyProfit(currency = 'CNY', months = 12) {
+      return API.get('/charts/monthly-profit', { currency, months });
+    },
+    
+    /**
+     * 获取收支趋势数据（折线图）
+     */
+    getFundFlowTrend(currency = 'CNY', months = 12) {
+      return API.get('/charts/fund-flow-trend', { currency, months });
+    },
+    
+    /**
+     * 获取资产走势数据
+     */
+    getAssetTrend(currency = 'CNY', period = 'month') {
+      return API.get('/charts/asset-trend', { currency, period });
+    },
+    
+    /**
+     * 获取平台对比数据
+     */
+    getPlatformComparison(currency = 'CNY', period = 'month') {
+      return API.get('/charts/platform-comparison', { currency, period });
     }
   },
   

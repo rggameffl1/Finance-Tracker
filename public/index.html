@@ -163,6 +163,14 @@
           交易记录
         </h2>
         <div class="section-actions">
+          <button class="btn btn-secondary" id="totalStatsBtn" title="查看所有交易的汇总统计">
+            <span class="icon">📊</span>
+            <span>总统计</span>
+          </button>
+          <button class="btn btn-secondary" id="assetStatsBtn" title="选择交易对查看详细统计">
+            <span class="icon">📈</span>
+            <span>交易对统计</span>
+          </button>
           <select id="platformFilter" class="filter-select">
             <option value="">全部平台</option>
           </select>
@@ -478,6 +486,62 @@
             优化数据库
           </button>
           <p class="settings-description" style="margin-top: 8px;">执行 ANALYZE 和 VACUUM 操作优化数据库性能</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 总统计模态框 -->
+  <div class="modal" id="totalStatsModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3>📊 交易总统计</h3>
+        <button class="btn btn-icon modal-close" id="closeTotalStatsModal">✕</button>
+      </div>
+      <div class="modal-body" id="totalStatsContent">
+        <!-- 统计内容将通过JS动态生成 -->
+        <div class="stats-loading">
+          <div class="loading-spinner"></div>
+          <p>加载中...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 交易对统计模态框 -->
+  <div class="modal" id="assetStatsModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3 id="assetStatsTitle">📈 选择交易对</h3>
+        <div class="modal-header-actions">
+          <button class="btn btn-secondary btn-sm" id="backToAssetListBtn" style="display: none;">
+            <span class="icon">←</span>
+            返回选择
+          </button>
+          <button class="btn btn-icon modal-close" id="closeAssetStatsModal">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- 交易对选择视图 -->
+        <div id="assetSelectView">
+          <div class="asset-search-box">
+            <input type="text" id="assetSearchInput" placeholder="🔍 搜索交易对..." class="form-control">
+          </div>
+          <div class="asset-list" id="assetList">
+            <!-- 交易对列表将通过JS动态生成 -->
+            <div class="stats-loading">
+              <div class="loading-spinner"></div>
+              <p>加载中...</p>
+            </div>
+          </div>
+        </div>
+        <!-- 交易对统计详情视图 -->
+        <div id="assetStatsView" style="display: none;">
+          <div id="assetStatsContent">
+            <!-- 统计内容将通过JS动态生成 -->
+          </div>
         </div>
       </div>
     </div>

@@ -1,8 +1,8 @@
 // {{CODE-Cycle-Integration:
-//   Task_ID: #T004
-//   Timestamp: 2025-12-08T05:04:12Z
+//   Task_ID: #T056-T058
+//   Timestamp: 2026-01-05T04:38:00Z
 //   Phase: D-Develop
-//   Context-Analysis: "交易记录API - CRUD接口实现，自动计算持仓时间和实现盈亏"
+//   Context-Analysis: "交易记录API - CRUD接口实现，自动计算持仓时间和实现盈亏，新增统计分析接口"
 //   Principle_Applied: "RESTful, SOLID, Error Handling"
 // }}
 // {{START_MODIFICATIONS}}
@@ -33,6 +33,31 @@ function calculateHoldingTime(openTime, closeTime) {
   if (seconds > 0 && days === 0) result += `${seconds}秒`; // 只在不足1天时显示秒
   
   return result || '0秒';
+}
+
+// 格式化持仓时间（毫秒转可读格式）
+function formatHoldingTimeMs(ms) {
+  if (!ms || ms <= 0) return '0秒';
+  
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  
+  let result = '';
+  if (days > 0) result += `${days}天`;
+  if (hours > 0) result += `${hours}小时`;
+  if (minutes > 0 && days === 0) result += `${minutes}分钟`;
+  
+  return result || '0分钟';
+}
+
+// 计算持仓时间毫秒数
+function calculateHoldingTimeMs(openTime, closeTime) {
+  if (!openTime || !closeTime) return 0;
+  const open = new Date(openTime);
+  const close = new Date(closeTime);
+  const diffMs = close - open;
+  return diffMs > 0 ? diffMs : 0;
 }
 
 // 格式化交易记录
@@ -168,6 +193,457 @@ function handleCursorPagination(req, res, platform_id, cursor, cursor_id, limit)
     res.status(500).json({ error: '获取交易记录失败', message: error.message });
   }
 }
+
+// ==================== 统计分析API ====================
+
+// 获取总统计数据 (任务56)
+router.get('/stats', (req, res) => {
+  try {
+    const { platform_id } = req.query;
+    
+    // 构建基础查询条件
+    let whereClause = '';
+    const params = [];
+    if (platform_id) {
+      whereClause = 'WHERE t.platform_id = ?';
+      params.push(platform_id);
+    }
+    
+    // 获取所有交易记录用于计算
+    const transactions = db.prepare(`
+      SELECT t.*, p.name as platform_name, p.currency as platform_currency
+      FROM transactions t
+      JOIN platforms p ON t.platform_id = p.id
+      ${whereClause}
+      ORDER BY t.open_time DESC
+    `).all(...params);
+    
+    if (transactions.length === 0) {
+      return res.json({
+        summary: {
+          total_trades: 0,
+          profit_trades: 0,
+          loss_trades: 0,
+          total_profit: 0,
+          total_fee: 0,
+          realized_profit: 0,
+          win_rate: 0,
+          max_profit: 0,
+          max_loss: 0,
+          avg_profit: 0,
+          profit_loss_ratio: 0,
+          total_investment: 0,
+          roi: 0,
+          total_holding_time_formatted: '0',
+          avg_holding_time_formatted: '0',
+          first_trade: null,
+          last_trade: null
+        },
+        by_asset: [],
+        type_distribution: {},
+        direction_distribution: {}
+      });
+    }
+    
+    // 计算汇总统计
+    let totalProfit = 0;
+    let totalFee = 0;
+    let totalInvestment = 0;
+    let profitTrades = 0;
+    let lossTrades = 0;
+    let maxProfit = 0;
+    let maxLoss = 0;
+    let totalHoldingTimeMs = 0;
+    let closedTradesCount = 0;
+    
+    // 按交易对分组统计
+    const assetMap = new Map();
+    // 按类型分组统计
+    const typeMap = new Map();
+    // 按方向分组统计
+    const directionMap = new Map();
+    
+    transactions.forEach(t => {
+      const profit = parseFloat(t.total_profit) || 0;
+      const fee = parseFloat(t.total_fee) || 0;
+      const realizedProfit = profit - fee;
+      const investment = parseFloat(t.investment) || 0;
+      
+      totalProfit += profit;
+      totalFee += fee;
+      totalInvestment += investment;
+      
+      if (realizedProfit > 0) {
+        profitTrades++;
+        if (realizedProfit > maxProfit) maxProfit = realizedProfit;
+      } else if (realizedProfit < 0) {
+        lossTrades++;
+        if (realizedProfit < maxLoss) maxLoss = realizedProfit;
+      }
+      
+      // 计算持仓时间
+      if (t.close_time) {
+        const holdingMs = calculateHoldingTimeMs(t.open_time, t.close_time);
+        totalHoldingTimeMs += holdingMs;
+        closedTradesCount++;
+      }
+      
+      // 按交易对分组
+      const assetKey = `${t.asset_code}|${t.platform_id}`;
+      if (!assetMap.has(assetKey)) {
+        assetMap.set(assetKey, {
+          asset_code: t.asset_code,
+          asset_name: t.asset_name,
+          platform_id: t.platform_id,
+          platform_name: t.platform_name,
+          platform_currency: t.platform_currency,
+          count: 0,
+          profit_count: 0,
+          loss_count: 0,
+          total_profit: 0,
+          total_fee: 0,
+          realized_profit: 0
+        });
+      }
+      const assetData = assetMap.get(assetKey);
+      assetData.count++;
+      assetData.total_profit += profit;
+      assetData.total_fee += fee;
+      assetData.realized_profit += realizedProfit;
+      if (realizedProfit > 0) assetData.profit_count++;
+      else if (realizedProfit < 0) assetData.loss_count++;
+      
+      // 按类型分组
+      const typeKey = t.type || '未知';
+      if (!typeMap.has(typeKey)) {
+        typeMap.set(typeKey, { count: 0, profit: 0, fee: 0 });
+      }
+      const typeData = typeMap.get(typeKey);
+      typeData.count++;
+      typeData.profit += profit;
+      typeData.fee += fee;
+      
+      // 按方向分组
+      const dirKey = t.direction || '未知';
+      if (!directionMap.has(dirKey)) {
+        directionMap.set(dirKey, { count: 0, profit: 0, fee: 0 });
+      }
+      const dirData = directionMap.get(dirKey);
+      dirData.count++;
+      dirData.profit += profit;
+      dirData.fee += fee;
+    });
+    
+    const totalTrades = transactions.length;
+    const realizedProfit = totalProfit - totalFee;
+    const winRate = totalTrades > 0 ? (profitTrades / totalTrades * 100) : 0;
+    const avgProfit = totalTrades > 0 ? (realizedProfit / totalTrades) : 0;
+    
+    // 计算盈亏比
+    const avgWin = profitTrades > 0 ? (Array.from(assetMap.values()).reduce((sum, a) => sum + (a.realized_profit > 0 ? a.realized_profit : 0), 0) / profitTrades) : 0;
+    const avgLossAbs = lossTrades > 0 ? Math.abs(Array.from(assetMap.values()).reduce((sum, a) => sum + (a.realized_profit < 0 ? a.realized_profit : 0), 0) / lossTrades) : 0;
+    const profitLossRatio = avgLossAbs > 0 ? (avgWin / avgLossAbs) : (avgWin > 0 ? Infinity : 0);
+    
+    // ROI
+    const roi = totalInvestment > 0 ? (realizedProfit / totalInvestment * 100) : 0;
+    
+    // 持仓时间
+    const avgHoldingTimeMs = closedTradesCount > 0 ? (totalHoldingTimeMs / closedTradesCount) : 0;
+    
+    // 按交易对分组数组（按实现盈亏排序）
+    const byAsset = Array.from(assetMap.values())
+      .map(a => ({
+        ...a,
+        win_rate: a.count > 0 ? (a.profit_count / a.count * 100).toFixed(1) : '0.0'
+      }))
+      .sort((a, b) => b.realized_profit - a.realized_profit);
+    
+    // 类型分布
+    const typeDistribution = {};
+    typeMap.forEach((data, type) => {
+      typeDistribution[type] = {
+        count: data.count,
+        percent: (data.count / totalTrades * 100).toFixed(1),
+        profit: data.profit,
+        fee: data.fee,
+        realized_profit: data.profit - data.fee
+      };
+    });
+    
+    // 方向分布
+    const directionDistribution = {};
+    directionMap.forEach((data, dir) => {
+      directionDistribution[dir] = {
+        count: data.count,
+        percent: (data.count / totalTrades * 100).toFixed(1),
+        profit: data.profit,
+        fee: data.fee,
+        realized_profit: data.profit - data.fee
+      };
+    });
+    
+    // 首次和最近交易时间
+    const sortedByTime = [...transactions].sort((a, b) => new Date(a.open_time) - new Date(b.open_time));
+    const firstTrade = sortedByTime[0]?.open_time || null;
+    const lastTrade = sortedByTime[sortedByTime.length - 1]?.open_time || null;
+    
+    res.json({
+      summary: {
+        total_trades: totalTrades,
+        profit_trades: profitTrades,
+        loss_trades: lossTrades,
+        total_profit: totalProfit,
+        total_fee: totalFee,
+        realized_profit: realizedProfit,
+        win_rate: parseFloat(winRate.toFixed(2)),
+        max_profit: maxProfit,
+        max_loss: maxLoss,
+        avg_profit: parseFloat(avgProfit.toFixed(2)),
+        profit_loss_ratio: profitLossRatio === Infinity ? '∞' : parseFloat(profitLossRatio.toFixed(2)),
+        total_investment: totalInvestment,
+        roi: parseFloat(roi.toFixed(2)),
+        total_holding_time_formatted: formatHoldingTimeMs(totalHoldingTimeMs),
+        avg_holding_time_formatted: formatHoldingTimeMs(avgHoldingTimeMs),
+        first_trade: firstTrade,
+        last_trade: lastTrade,
+        asset_count: assetMap.size
+      },
+      by_asset: byAsset,
+      type_distribution: typeDistribution,
+      direction_distribution: directionDistribution
+    });
+  } catch (error) {
+    console.error('获取总统计数据失败:', error);
+    res.status(500).json({ error: '获取总统计数据失败', message: error.message });
+  }
+});
+
+// 获取交易对列表 (任务57)
+router.get('/asset-codes', (req, res) => {
+  try {
+    const { platform_id } = req.query;
+    
+    let whereClause = '';
+    const params = [];
+    if (platform_id) {
+      whereClause = 'WHERE t.platform_id = ?';
+      params.push(platform_id);
+    }
+    
+    const assetCodes = db.prepare(`
+      SELECT
+        t.asset_code,
+        t.asset_name,
+        t.platform_id,
+        p.name as platform_name,
+        p.currency as platform_currency,
+        COUNT(*) as trade_count,
+        SUM(CAST(t.total_profit AS REAL) - CAST(t.total_fee AS REAL)) as total_realized_profit
+      FROM transactions t
+      JOIN platforms p ON t.platform_id = p.id
+      ${whereClause}
+      GROUP BY t.asset_code, t.platform_id
+      ORDER BY trade_count DESC
+    `).all(...params);
+    
+    res.json({
+      data: assetCodes.map(a => ({
+        ...a,
+        total_realized_profit: parseFloat(a.total_realized_profit) || 0
+      }))
+    });
+  } catch (error) {
+    console.error('获取交易对列表失败:', error);
+    res.status(500).json({ error: '获取交易对列表失败', message: error.message });
+  }
+});
+
+// 获取单个交易对统计 (任务58)
+router.get('/asset-stats/:asset_code', (req, res) => {
+  try {
+    const { asset_code } = req.params;
+    const { platform_id } = req.query;
+    
+    // 构建查询条件
+    let whereClause = 'WHERE t.asset_code = ?';
+    const params = [asset_code];
+    
+    if (platform_id) {
+      whereClause += ' AND t.platform_id = ?';
+      params.push(platform_id);
+    }
+    
+    // 获取该交易对的所有交易记录
+    const transactions = db.prepare(`
+      SELECT t.*, p.name as platform_name, p.currency as platform_currency
+      FROM transactions t
+      JOIN platforms p ON t.platform_id = p.id
+      ${whereClause}
+      ORDER BY t.open_time DESC
+    `).all(...params);
+    
+    if (transactions.length === 0) {
+      return res.status(404).json({ error: '未找到该交易对的交易记录' });
+    }
+    
+    // 获取基本信息
+    const firstRecord = transactions[0];
+    const assetName = firstRecord.asset_name;
+    const platformName = firstRecord.platform_name;
+    const platformCurrency = firstRecord.platform_currency;
+    const platformId = firstRecord.platform_id;
+    
+    // 计算统计数据
+    let totalProfit = 0;
+    let totalFee = 0;
+    let totalInvestment = 0;
+    let profitTrades = 0;
+    let lossTrades = 0;
+    let maxProfit = 0;
+    let maxLoss = 0;
+    let totalHoldingTimeMs = 0;
+    let closedTradesCount = 0;
+    let profitSum = 0;  // 盈利交易的总盈利
+    let lossSum = 0;    // 亏损交易的总亏损(绝对值)
+    
+    // 按类型分组统计
+    const typeMap = new Map();
+    // 按方向分组统计
+    const directionMap = new Map();
+    
+    transactions.forEach(t => {
+      const profit = parseFloat(t.total_profit) || 0;
+      const fee = parseFloat(t.total_fee) || 0;
+      const realizedProfit = profit - fee;
+      const investment = parseFloat(t.investment) || 0;
+      
+      totalProfit += profit;
+      totalFee += fee;
+      totalInvestment += investment;
+      
+      if (realizedProfit > 0) {
+        profitTrades++;
+        profitSum += realizedProfit;
+        if (realizedProfit > maxProfit) maxProfit = realizedProfit;
+      } else if (realizedProfit < 0) {
+        lossTrades++;
+        lossSum += Math.abs(realizedProfit);
+        if (realizedProfit < maxLoss) maxLoss = realizedProfit;
+      }
+      
+      // 计算持仓时间
+      if (t.close_time) {
+        const holdingMs = calculateHoldingTimeMs(t.open_time, t.close_time);
+        totalHoldingTimeMs += holdingMs;
+        closedTradesCount++;
+      }
+      
+      // 按类型分组
+      const typeKey = t.type || '未知';
+      if (!typeMap.has(typeKey)) {
+        typeMap.set(typeKey, { count: 0, profit: 0, fee: 0 });
+      }
+      const typeData = typeMap.get(typeKey);
+      typeData.count++;
+      typeData.profit += profit;
+      typeData.fee += fee;
+      
+      // 按方向分组
+      const dirKey = t.direction || '未知';
+      if (!directionMap.has(dirKey)) {
+        directionMap.set(dirKey, { count: 0, profit: 0, fee: 0 });
+      }
+      const dirData = directionMap.get(dirKey);
+      dirData.count++;
+      dirData.profit += profit;
+      dirData.fee += fee;
+    });
+    
+    const totalTrades = transactions.length;
+    const realizedProfit = totalProfit - totalFee;
+    const winRate = totalTrades > 0 ? (profitTrades / totalTrades * 100) : 0;
+    const avgProfit = totalTrades > 0 ? (realizedProfit / totalTrades) : 0;
+    
+    // 计算盈亏比 (平均盈利 / 平均亏损)
+    const avgWin = profitTrades > 0 ? (profitSum / profitTrades) : 0;
+    const avgLossAbs = lossTrades > 0 ? (lossSum / lossTrades) : 0;
+    const profitLossRatio = avgLossAbs > 0 ? (avgWin / avgLossAbs) : (avgWin > 0 ? Infinity : 0);
+    
+    // ROI
+    const roi = totalInvestment > 0 ? (realizedProfit / totalInvestment * 100) : 0;
+    
+    // 持仓时间
+    const avgHoldingTimeMs = closedTradesCount > 0 ? (totalHoldingTimeMs / closedTradesCount) : 0;
+    
+    // 类型分布
+    const typeDistribution = {};
+    typeMap.forEach((data, type) => {
+      typeDistribution[type] = {
+        count: data.count,
+        percent: (data.count / totalTrades * 100).toFixed(1),
+        profit: data.profit,
+        fee: data.fee,
+        realized_profit: data.profit - data.fee
+      };
+    });
+    
+    // 方向分布
+    const directionDistribution = {};
+    directionMap.forEach((data, dir) => {
+      directionDistribution[dir] = {
+        count: data.count,
+        percent: (data.count / totalTrades * 100).toFixed(1),
+        profit: data.profit,
+        fee: data.fee,
+        realized_profit: data.profit - data.fee
+      };
+    });
+    
+    // 首次和最近交易时间
+    const sortedByTime = [...transactions].sort((a, b) => new Date(a.open_time) - new Date(b.open_time));
+    const firstTrade = sortedByTime[0]?.open_time || null;
+    const lastTrade = sortedByTime[sortedByTime.length - 1]?.open_time || null;
+    
+    res.json({
+      asset_code: asset_code,
+      asset_name: assetName,
+      platform: {
+        id: platformId,
+        name: platformName,
+        currency: platformCurrency
+      },
+      summary: {
+        total_trades: totalTrades,
+        profit_trades: profitTrades,
+        loss_trades: lossTrades,
+        total_profit: totalProfit,
+        total_fee: totalFee,
+        realized_profit: realizedProfit,
+        win_rate: parseFloat(winRate.toFixed(2)),
+        max_profit: maxProfit,
+        max_loss: maxLoss,
+        avg_profit: parseFloat(avgProfit.toFixed(2)),
+        profit_loss_ratio: profitLossRatio === Infinity ? '∞' : parseFloat(profitLossRatio.toFixed(2)),
+        total_investment: totalInvestment,
+        roi: parseFloat(roi.toFixed(2)),
+        total_holding_time_ms: totalHoldingTimeMs,
+        total_holding_time_formatted: formatHoldingTimeMs(totalHoldingTimeMs),
+        avg_holding_time_ms: avgHoldingTimeMs,
+        avg_holding_time_formatted: formatHoldingTimeMs(avgHoldingTimeMs),
+        first_trade: firstTrade,
+        last_trade: lastTrade
+      },
+      type_distribution: typeDistribution,
+      direction_distribution: directionDistribution,
+      transactions: transactions.map(formatTransaction)
+    });
+  } catch (error) {
+    console.error('获取交易对统计失败:', error);
+    res.status(500).json({ error: '获取交易对统计失败', message: error.message });
+  }
+});
+
+// ==================== CRUD API ====================
 
 // 获取单个交易记录
 router.get('/:id', (req, res) => {

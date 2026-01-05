@@ -31,7 +31,7 @@ function getPlatformFundStatus(platformId) {
   const result = db.prepare(`
     SELECT
       p.initial_capital,
-      COALESCE(SUM(t.total_profit - t.total_fee), 0) as total_profit
+      COALESCE(SUM(CAST(t.total_profit AS REAL) - CAST(t.total_fee AS REAL)), 0) as total_profit
     FROM platforms p
     LEFT JOIN transactions t ON p.id = t.platform_id
     WHERE p.id = ?

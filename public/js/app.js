@@ -70,6 +70,7 @@ const App = {
       this.state.displayCurrency = e.target.value;
       this.loadOverview();
       this.renderPlatforms();
+      this.loadFundSummary();
     });
     
     // 刷新汇率按钮
@@ -204,6 +205,36 @@ const App = {
     // 数据库优化按钮
     document.getElementById('optimizeDatabaseBtn').addEventListener('click', () => {
       this.optimizeDatabase();
+    });
+    
+    // 总统计按钮
+    document.getElementById('totalStatsBtn').addEventListener('click', () => {
+      this.openTotalStatsModal();
+    });
+    
+    // 交易对统计按钮
+    document.getElementById('assetStatsBtn').addEventListener('click', () => {
+      this.openAssetStatsModal();
+    });
+    
+    // 总统计模态框关闭
+    document.getElementById('closeTotalStatsModal').addEventListener('click', () => {
+      Modal.close('totalStatsModal');
+    });
+    
+    // 交易对统计模态框关闭
+    document.getElementById('closeAssetStatsModal').addEventListener('click', () => {
+      Modal.close('assetStatsModal');
+    });
+    
+    // 返回交易对列表按钮
+    document.getElementById('backToAssetListBtn').addEventListener('click', () => {
+      this.showAssetSelectView();
+    });
+    
+    // 交易对搜索
+    document.getElementById('assetSearchInput').addEventListener('input', (e) => {
+      this.filterAssetList(e.target.value);
     });
     
     // 点击模态框背景关闭
@@ -1607,6 +1638,508 @@ const App = {
       importBtn.disabled = false;
       importBtn.innerHTML = originalText;
     }
+  },
+  
+  // ==================== 统计分析功能 ====================
+  
+  /**
+   * 打开总统计模态框
+   */
+  async openTotalStatsModal() {
+    Modal.open('totalStatsModal');
+    
+    // 显示加载状态
+    document.getElementById('totalStatsContent').innerHTML = `
+      <div class="stats-loading">
+        <div class="loading-spinner"></div>
+        <p>加载中...</p>
+      </div>
+    `;
+    
+    try {
+      const data = await API.transactions.getStats();
+      this.renderTotalStats(data);
+    } catch (error) {
+      console.error('加载总统计失败:', error);
+      document.getElementById('totalStatsContent').innerHTML = `
+        <div class="stats-empty">
+          <div class="stats-empty-icon">❌</div>
+          <div class="stats-empty-text">加载失败: ${error.message}</div>
+        </div>
+      `;
+    }
+  },
+  
+  /**
+   * 渲染总统计数据
+   */
+  renderTotalStats(data) {
+    const { summary, by_asset, type_distribution, direction_distribution } = data;
+    const container = document.getElementById('totalStatsContent');
+    
+    if (summary.total_trades === 0) {
+      container.innerHTML = `
+        <div class="stats-empty">
+          <div class="stats-empty-icon">📊</div>
+          <div class="stats-empty-text">暂无交易记录</div>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = `
+      <!-- 统计卡片 -->
+      <div class="stats-cards">
+        <div class="stats-card ${summary.realized_profit >= 0 ? 'profit' : 'loss'}">
+          <div class="card-icon">💰</div>
+          <div class="card-content">
+            <div class="card-label">总盈亏</div>
+            <div class="card-value ${this.getProfitClass(summary.total_profit)}">${this.formatMoney(summary.total_profit)}</div>
+          </div>
+        </div>
+        <div class="stats-card fee">
+          <div class="card-icon">💸</div>
+          <div class="card-content">
+            <div class="card-label">总费用</div>
+            <div class="card-value">${this.formatMoney(summary.total_fee)}</div>
+          </div>
+        </div>
+        <div class="stats-card ${summary.realized_profit >= 0 ? 'profit' : 'loss'}">
+          <div class="card-icon">📈</div>
+          <div class="card-content">
+            <div class="card-label">实现盈亏</div>
+            <div class="card-value ${this.getProfitClass(summary.realized_profit)}">${this.formatMoney(summary.realized_profit)}</div>
+          </div>
+        </div>
+        <div class="stats-card">
+          <div class="card-icon">📊</div>
+          <div class="card-content">
+            <div class="card-label">胜率</div>
+            <div class="card-value">${summary.win_rate}%</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 交易概况 -->
+      <div class="stats-section">
+        <div class="stats-section-title">交易概况</div>
+        <div class="stats-details">
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">总交易次数</span>
+            <span class="stats-detail-value">${summary.total_trades} 笔</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">涉及交易对</span>
+            <span class="stats-detail-value">${summary.asset_count} 个</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">盈利次数</span>
+            <span class="stats-detail-value profit-up">${summary.profit_trades} 笔</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">亏损次数</span>
+            <span class="stats-detail-value profit-down">${summary.loss_trades} 笔</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">平均盈亏</span>
+            <span class="stats-detail-value ${this.getProfitClass(summary.avg_profit)}">${this.formatMoney(summary.avg_profit)}/笔</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">盈亏比</span>
+            <span class="stats-detail-value">${summary.profit_loss_ratio} : 1</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最大单笔盈利</span>
+            <span class="stats-detail-value profit-up">${this.formatMoney(summary.max_profit)}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最大单笔亏损</span>
+            <span class="stats-detail-value profit-down">${this.formatMoney(summary.max_loss)}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">总投入资金</span>
+            <span class="stats-detail-value">${this.formatMoney(summary.total_investment)}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">收益率 ROI</span>
+            <span class="stats-detail-value ${this.getProfitClass(summary.roi)}">${summary.roi}%</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">首次交易</span>
+            <span class="stats-detail-value">${summary.first_trade ? this.formatDate(summary.first_trade) : '--'}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最近交易</span>
+            <span class="stats-detail-value">${summary.last_trade ? this.formatDate(summary.last_trade) : '--'}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 类型与方向分布 -->
+      <div class="stats-section">
+        <div class="stats-section-title">类型与方向分布</div>
+        <div class="stats-distribution">
+          ${this.renderDistribution(type_distribution, '类型')}
+          ${this.renderDistribution(direction_distribution, '方向')}
+        </div>
+      </div>
+      
+      <!-- 按交易对分组 -->
+      <div class="stats-section">
+        <div class="stats-section-title">按交易对分组</div>
+        <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+          <table class="stats-asset-table">
+            <thead>
+              <tr>
+                <th>交易对</th>
+                <th>平台</th>
+                <th>笔数</th>
+                <th>实现盈亏</th>
+                <th>胜率</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${by_asset.map(asset => `
+                <tr>
+                  <td>
+                    <div class="asset-name">${asset.asset_name}</div>
+                    <div class="asset-code">${asset.asset_code}</div>
+                  </td>
+                  <td><span class="platform-tag">${asset.platform_name}</span></td>
+                  <td>${asset.count}</td>
+                  <td class="${this.getProfitClass(asset.realized_profit)}">${this.formatMoney(asset.realized_profit)}</td>
+                  <td>${asset.win_rate}%</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  },
+  
+  /**
+   * 渲染分布数据
+   */
+  renderDistribution(distribution, label) {
+    if (!distribution || Object.keys(distribution).length === 0) {
+      return '';
+    }
+    
+    return Object.entries(distribution).map(([key, data]) => `
+      <div class="distribution-item">
+        <div class="distribution-label">
+          <span>${key}</span>
+          <span class="distribution-count">${data.count}笔 (${data.percent}%)</span>
+        </div>
+        <div class="distribution-value ${this.getProfitClass(data.realized_profit)}">${this.formatMoney(data.realized_profit)}</div>
+      </div>
+    `).join('');
+  },
+  
+  /**
+   * 打开交易对统计模态框
+   */
+  async openAssetStatsModal() {
+    Modal.open('assetStatsModal');
+    this.showAssetSelectView();
+    
+    try {
+      const data = await API.transactions.getAssetCodes();
+      this.state.assetCodes = data.data;
+      this.renderAssetList(data.data);
+    } catch (error) {
+      console.error('加载交易对列表失败:', error);
+      document.getElementById('assetList').innerHTML = `
+        <div class="stats-empty">
+          <div class="stats-empty-icon">❌</div>
+          <div class="stats-empty-text">加载失败: ${error.message}</div>
+        </div>
+      `;
+    }
+  },
+  
+  /**
+   * 显示交易对选择视图
+   */
+  showAssetSelectView() {
+    document.getElementById('assetStatsTitle').textContent = '📈 选择交易对';
+    document.getElementById('backToAssetListBtn').style.display = 'none';
+    document.getElementById('assetSelectView').style.display = 'block';
+    document.getElementById('assetStatsView').style.display = 'none';
+    document.getElementById('assetSearchInput').value = '';
+  },
+  
+  /**
+   * 显示交易对统计视图
+   */
+  showAssetStatsView(assetName, assetCode) {
+    document.getElementById('assetStatsTitle').textContent = `📈 ${assetName} (${assetCode}) 交易统计`;
+    document.getElementById('backToAssetListBtn').style.display = 'inline-flex';
+    document.getElementById('assetSelectView').style.display = 'none';
+    document.getElementById('assetStatsView').style.display = 'block';
+  },
+  
+  /**
+   * 渲染交易对列表
+   */
+  renderAssetList(assets) {
+    const container = document.getElementById('assetList');
+    
+    if (!assets || assets.length === 0) {
+      container.innerHTML = `
+        <div class="stats-empty">
+          <div class="stats-empty-icon">📊</div>
+          <div class="stats-empty-text">暂无交易记录</div>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = assets.map(asset => `
+      <div class="asset-list-item" onclick="App.loadAssetStats('${asset.asset_code}', ${asset.platform_id}, '${asset.asset_name}')">
+        <div class="asset-list-item-info">
+          <div class="asset-list-item-name">
+            📌 ${asset.asset_name}
+          </div>
+          <div class="asset-list-item-code">${asset.asset_code}</div>
+        </div>
+        <div class="asset-list-item-meta">
+          <div class="asset-list-item-count">${asset.trade_count} 笔</div>
+          <div class="asset-list-item-platform">${asset.platform_name}</div>
+          <div class="asset-list-item-profit ${this.getProfitClass(asset.total_realized_profit)}">${this.formatMoney(asset.total_realized_profit)}</div>
+        </div>
+      </div>
+    `).join('');
+  },
+  
+  /**
+   * 筛选交易对列表
+   */
+  filterAssetList(keyword) {
+    if (!this.state.assetCodes) return;
+    
+    const filtered = keyword
+      ? this.state.assetCodes.filter(asset =>
+          asset.asset_name.toLowerCase().includes(keyword.toLowerCase()) ||
+          asset.asset_code.toLowerCase().includes(keyword.toLowerCase()) ||
+          asset.platform_name.toLowerCase().includes(keyword.toLowerCase())
+        )
+      : this.state.assetCodes;
+    
+    this.renderAssetList(filtered);
+  },
+  
+  /**
+   * 加载交易对统计
+   */
+  async loadAssetStats(assetCode, platformId, assetName) {
+    this.showAssetStatsView(assetName, assetCode);
+    
+    document.getElementById('assetStatsContent').innerHTML = `
+      <div class="stats-loading">
+        <div class="loading-spinner"></div>
+        <p>加载中...</p>
+      </div>
+    `;
+    
+    try {
+      const data = await API.transactions.getAssetStats(assetCode, { platform_id: platformId });
+      this.renderAssetStats(data);
+    } catch (error) {
+      console.error('加载交易对统计失败:', error);
+      document.getElementById('assetStatsContent').innerHTML = `
+        <div class="stats-empty">
+          <div class="stats-empty-icon">❌</div>
+          <div class="stats-empty-text">加载失败: ${error.message}</div>
+        </div>
+      `;
+    }
+  },
+  
+  /**
+   * 渲染交易对统计
+   */
+  renderAssetStats(data) {
+    const { summary, type_distribution, direction_distribution, transactions, platform } = data;
+    const container = document.getElementById('assetStatsContent');
+    const currency = platform.currency;
+    
+    container.innerHTML = `
+      <!-- 统计卡片 -->
+      <div class="stats-cards">
+        <div class="stats-card ${summary.realized_profit >= 0 ? 'profit' : 'loss'}">
+          <div class="card-icon">💰</div>
+          <div class="card-content">
+            <div class="card-label">总盈亏</div>
+            <div class="card-value ${this.getProfitClass(summary.total_profit)}">${this.formatMoney(summary.total_profit)} ${currency}</div>
+          </div>
+        </div>
+        <div class="stats-card fee">
+          <div class="card-icon">💸</div>
+          <div class="card-content">
+            <div class="card-label">总费用</div>
+            <div class="card-value">${this.formatMoney(summary.total_fee)} ${currency}</div>
+          </div>
+        </div>
+        <div class="stats-card ${summary.realized_profit >= 0 ? 'profit' : 'loss'}">
+          <div class="card-icon">📈</div>
+          <div class="card-content">
+            <div class="card-label">实现盈亏</div>
+            <div class="card-value ${this.getProfitClass(summary.realized_profit)}">${this.formatMoney(summary.realized_profit)} ${currency}</div>
+          </div>
+        </div>
+        <div class="stats-card">
+          <div class="card-icon">📊</div>
+          <div class="card-content">
+            <div class="card-label">胜率</div>
+            <div class="card-value">${summary.win_rate}%</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 交易概况 -->
+      <div class="stats-section">
+        <div class="stats-section-title">交易概况</div>
+        <div class="stats-details">
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">交易次数</span>
+            <span class="stats-detail-value">${summary.total_trades} 笔 (盈利 ${summary.profit_trades} / 亏损 ${summary.loss_trades})</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">平均盈亏</span>
+            <span class="stats-detail-value ${this.getProfitClass(summary.avg_profit)}">${this.formatMoney(summary.avg_profit)} ${currency}/笔</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">盈亏比</span>
+            <span class="stats-detail-value">${summary.profit_loss_ratio} : 1</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最大单笔盈利</span>
+            <span class="stats-detail-value profit-up">${this.formatMoney(summary.max_profit)} ${currency}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最大单笔亏损</span>
+            <span class="stats-detail-value profit-down">${this.formatMoney(summary.max_loss)} ${currency}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">总投入资金</span>
+            <span class="stats-detail-value">${this.formatMoney(summary.total_investment)} ${currency}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">收益率 ROI</span>
+            <span class="stats-detail-value ${this.getProfitClass(summary.roi)}">${summary.roi}%</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">总持仓时间</span>
+            <span class="stats-detail-value">${summary.total_holding_time_formatted || '--'}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">平均持仓时间</span>
+            <span class="stats-detail-value">${summary.avg_holding_time_formatted || '--'}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">首次交易</span>
+            <span class="stats-detail-value">${summary.first_trade ? this.formatDate(summary.first_trade) : '--'}</span>
+          </div>
+          <div class="stats-detail-row">
+            <span class="stats-detail-label">最近交易</span>
+            <span class="stats-detail-value">${summary.last_trade ? this.formatDate(summary.last_trade) : '--'}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 类型与方向分布 -->
+      <div class="stats-section">
+        <div class="stats-section-title">类型与方向分布</div>
+        <div class="stats-distribution">
+          ${this.renderDistribution(type_distribution, '类型')}
+          ${this.renderDistribution(direction_distribution, '方向')}
+        </div>
+      </div>
+      
+      <!-- 交易记录列表 -->
+      <div class="stats-section">
+        <button class="stats-transactions-toggle" onclick="App.toggleTransactionsList(this)">
+          <span class="toggle-icon">▶</span>
+          查看该交易对的所有交易记录 (${transactions.length} 笔)
+        </button>
+        <div class="stats-transactions-list" id="assetTransactionsList">
+          <div class="table-container">
+            <table class="stats-asset-table">
+              <thead>
+                <tr>
+                  <th>开仓时间</th>
+                  <th>类型</th>
+                  <th>方向</th>
+                  <th>杠杆</th>
+                  <th>实现盈亏</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${transactions.map(t => `
+                  <tr>
+                    <td>${this.formatDate(t.open_time)}</td>
+                    <td>${t.type}</td>
+                    <td>${t.direction}</td>
+                    <td>${t.leverage}x</td>
+                    <td class="${this.getProfitClass(t.realized_profit)}">${this.formatMoney(t.realized_profit)} ${currency}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+  
+  /**
+   * 切换交易记录列表展开/收起
+   */
+  toggleTransactionsList(btn) {
+    btn.classList.toggle('expanded');
+    const list = document.getElementById('assetTransactionsList');
+    list.classList.toggle('expanded');
+  },
+  
+  /**
+   * 格式化日期
+   */
+  formatDate(dateStr) {
+    if (!dateStr) return '--';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+  
+  /**
+   * 格式化金额
+   */
+  formatMoney(value) {
+    if (value === null || value === undefined) return '--';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '--';
+    const prefix = num >= 0 ? '+' : '';
+    return prefix + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+  
+  /**
+   * 获取盈亏样式类名
+   */
+  getProfitClass(value) {
+    if (value === null || value === undefined) return '';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '';
+    if (num > 0) return 'profit-up';
+    if (num < 0) return 'profit-down';
+    return '';
   }
 };
 

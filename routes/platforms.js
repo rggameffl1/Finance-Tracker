@@ -15,9 +15,9 @@ const db = require('../database/db');
 router.get('/', (req, res) => {
   try {
     const platforms = db.prepare(`
-      SELECT 
+      SELECT
         p.*,
-        COALESCE(SUM(t.total_profit - t.total_fee), 0) as total_realized_profit
+        COALESCE(SUM(CAST(t.total_profit AS REAL) - CAST(t.total_fee AS REAL)), 0) as total_realized_profit
       FROM platforms p
       LEFT JOIN transactions t ON p.id = t.platform_id
       GROUP BY p.id
@@ -25,14 +25,20 @@ router.get('/', (req, res) => {
     `).all();
     
     // 计算每个平台的总资金和涨跌幅
-    const result = platforms.map(p => ({
-      ...p,
-      total_capital: p.initial_capital + p.total_realized_profit,
-      change_amount: p.total_realized_profit,
-      change_percent: p.initial_capital > 0 
-        ? ((p.total_realized_profit / p.initial_capital) * 100).toFixed(2)
-        : 0
-    }));
+    const result = platforms.map(p => {
+      const initialCapital = parseFloat(p.initial_capital) || 0;
+      const totalRealizedProfit = parseFloat(p.total_realized_profit) || 0;
+      return {
+        ...p,
+        initial_capital: initialCapital,
+        total_realized_profit: totalRealizedProfit,
+        total_capital: initialCapital + totalRealizedProfit,
+        change_amount: totalRealizedProfit,
+        change_percent: initialCapital > 0
+          ? ((totalRealizedProfit / initialCapital) * 100).toFixed(2)
+          : 0
+      };
+    });
     
     res.json(result);
   } catch (error) {
@@ -46,9 +52,9 @@ router.get('/:id', (req, res) => {
   try {
     const { id } = req.params;
     const platform = db.prepare(`
-      SELECT 
+      SELECT
         p.*,
-        COALESCE(SUM(t.total_profit - t.total_fee), 0) as total_realized_profit
+        COALESCE(SUM(CAST(t.total_profit AS REAL) - CAST(t.total_fee AS REAL)), 0) as total_realized_profit
       FROM platforms p
       LEFT JOIN transactions t ON p.id = t.platform_id
       WHERE p.id = ?
@@ -59,12 +65,17 @@ router.get('/:id', (req, res) => {
       return res.status(404).json({ error: '平台不存在' });
     }
     
+    const initialCapital = parseFloat(platform.initial_capital) || 0;
+    const totalRealizedProfit = parseFloat(platform.total_realized_profit) || 0;
+    
     const result = {
       ...platform,
-      total_capital: platform.initial_capital + platform.total_realized_profit,
-      change_amount: platform.total_realized_profit,
-      change_percent: platform.initial_capital > 0 
-        ? ((platform.total_realized_profit / platform.initial_capital) * 100).toFixed(2)
+      initial_capital: initialCapital,
+      total_realized_profit: totalRealizedProfit,
+      total_capital: initialCapital + totalRealizedProfit,
+      change_amount: totalRealizedProfit,
+      change_percent: initialCapital > 0
+        ? ((totalRealizedProfit / initialCapital) * 100).toFixed(2)
         : 0
     };
     
